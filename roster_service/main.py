@@ -17,11 +17,28 @@ import os
 import tempfile
 
 from fastapi import FastAPI, File, Header, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from roster_parser import parse_roster_pdf
 
 app = FastAPI(title="IALPA App — Roster Parser")
+
+# The Flutter app runs as a web page (flutter run -d chrome during
+# development, and the same is true of a real web deployment later),
+# so the browser enforces CORS on requests from that page's origin to
+# this service's different origin. Without this, the browser blocks
+# the request before it ever reaches the routes below — curl/native
+# apps aren't subject to CORS, which is why this wasn't caught by the
+# earlier curl test. Wide open (`*`) is fine here: there's no cookie
+# or session auth to protect, only the X-API-Key header, which CORS
+# doesn't weaken.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Simple shared-secret check so this isn't a wide-open upload endpoint.
 # Set ROSTER_API_KEY in the deployment's environment variables; the app
