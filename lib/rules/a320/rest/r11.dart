@@ -1,0 +1,67 @@
+import '../../../models/duty.dart';
+import '../../../models/rule_result.dart';
+
+/// R-11 — Minimum rest following an Intercontinental duty that returns to
+/// base the same day (clause 3.14.3(b) of the A320/321 Working Conditions).
+/// Uses the same formula as R-06.
+///
+/// EASA-equivalent floor (added 2026-09-28, same pattern as R-06/
+/// `min_rest_before_intercontinental.dart`): at home base, EASA minimum =
+/// the preceding duty period or 12h, whichever is greater.
+RuleResult verifyR11({
+  required Duty previousDuty,
+  required Duration plannedRest,
+}) {
+  const absoluteMinimum = Duration(hours: 12);
+  const offset = Duration(hours: 2);
+
+  final formulaMinimum = previousDuty.duration + offset;
+  final minimumRest =
+      formulaMinimum > absoluteMinimum ? formulaMinimum : absoluteMinimum;
+
+  final easaMinimum = previousDuty.duration > absoluteMinimum
+      ? previousDuty.duration
+      : absoluteMinimum;
+  const easaReference = 'EASA ORO.FTL.235 / CS FTL.1.235 (at home base): '
+      'minimum rest = the preceding duty period or 12h, whichever is '
+      'greater.';
+
+  if (plannedRest >= minimumRest) {
+    return RuleResult(
+      color: RuleColor.green,
+      clause: '3.14.3(b)',
+      explanation: 'Planned rest of ${_fmt(plannedRest)} meets the required '
+          'minimum of ${_fmt(minimumRest)}.',
+      easaReference: easaReference,
+    );
+  }
+
+  if (plannedRest >= easaMinimum) {
+    return RuleResult(
+      color: RuleColor.amber,
+      clause: '3.14.3(b)',
+      explanation: 'OWC (Outside Working Conditions). Planned rest of '
+          '${_fmt(plannedRest)} does NOT meet the convenio minimum of '
+          '${_fmt(minimumRest)}, but it DOES meet the EASA minimum of '
+          '${_fmt(easaMinimum)} — so it breaches the agreement but is '
+          'legal. Requires Blue Sheet compensation / pilot consent.',
+      easaReference: easaReference,
+    );
+  }
+
+  return RuleResult(
+    color: RuleColor.red,
+    clause: '3.14.3(b)',
+    explanation: 'Planned rest of ${_fmt(plannedRest)} does NOT meet the '
+        'required minimum of ${_fmt(minimumRest)}, and it also falls short '
+        'of the EASA minimum of ${_fmt(easaMinimum)} — this is not just a '
+        'breach of the agreement, it is illegal under EASA.',
+    easaReference: easaReference,
+  );
+}
+
+String _fmt(Duration d) {
+  final hours = d.inMinutes ~/ 60;
+  final minutes = d.inMinutes % 60;
+  return '${hours}h${minutes.toString().padLeft(2, '0')}';
+}
