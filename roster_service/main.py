@@ -16,7 +16,7 @@ Deploy: see README.md for Render/Railway instructions.
 import os
 import tempfile
 
-from fastapi import FastAPI, File, Header, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -62,7 +62,13 @@ def health():
 async def parse_roster(
     file: UploadFile = File(...),
     x_api_key: str | None = Header(default=None),
+    year: int | None = Form(default=None),
 ):
+    """`year` (added 30/09): the app sends the year it will use to build
+    the final dates (the same one shown in its year stepper), so the
+    roster's printed local times can be converted to UTC using the
+    correct DST offset for that year. Falls back to the service's own
+    current year if the app doesn't send one (older app builds)."""
     _check_api_key(x_api_key)
 
     if file.content_type not in ("application/pdf", "application/octet-stream"):
@@ -75,7 +81,7 @@ async def parse_roster(
             contents = await file.read()
             tmp.write(contents)
 
-        results = parse_roster_pdf(tmp_path)
+        results = parse_roster_pdf(tmp_path, year=year)
         return JSONResponse({"days": results})
     except Exception as exc:  # noqa: BLE001 — surface parse failures plainly
         raise HTTPException(status_code=422, detail=f"Could not parse roster: {exc}") from exc

@@ -7,10 +7,37 @@ rosters (30/09): 30/31 'ok' + 1/31 correctly-'empty' on the July roster,
 Extended here to loop over every page of the PDF (the prototype only
 looked at page 0), so a roster PDF spanning more than one month is fully
 parsed. Each page is expected to carry its own date-column header row.
+
+30/09 (this session): two further passes added after the raw per-page
+extraction, both needed because Elena confirmed the printed times are
+LOCAL TIME AT EACH STATION, not UTC — the app's rule engine works only in
+UTC (IALPA/EASA duty limits are defined that way), so raw HH:MM values are
+not directly usable:
+
+1. `resolve_utc_times` — walks the roster in chronological order, tracking
+   which station the pilot is physically at (a report after an overnight
+   away is local to wherever they are, per Elena), and converts every
+   printed HH:MM to a full UTC datetime using each leg's actual
+   origin/destination airport timezone (`airportsdata` + `zoneinfo`,
+   correctly handling DST for the given year). Adds `...Utc` fields
+   alongside the original LT ones (`reportTimeUtc`, `trailingTimeUtc`,
+   `offBlockUtc`, `onBlockUtc`, standby `startUtc`/`endUtc`) rather than
+   replacing them, so the app can show both ("14:25 LT (13:25 UTC)").
+2. `stitch_overnight_duties` — for a duty that the roster prints across
+   two day-rows (a 'continues_next_day' flight with no arrival time, whose
+   arrival appears on the next day's 'continuation_from_previous_day'
+   row), copies the missing half across so BOTH rows carry a complete
+   report+finish pair for the SAME duty, instead of each being
+   individually incomplete and unimportable.
+
+Both passes are best-effort: known simplifications are noted inline, and
+anything that can't be resolved confidently is left as-is rather than
+guessed (same principle as the token parser below).
 """
 
 import re
 from collections import defaultdict
+from datetime import date, datetime, timedelta, timezone
 
 FLIGHT_COLOR = (0.039216, 0.43137, 0.74118)  # blue — flight numbers
 DELAY_COLOR = (0.50196, 0.0, 0.0)  # red — Delay
@@ -23,6 +50,8 @@ DAY_OFF_CODES = {"F", "GL"}
 STANDBY_CODES = {"STBH", "STBQ"}
 BRIEFING_CODES = {"BR"}  # briefing after a long gap not flying to a station; counts as duty
 DUTY_BLOCK_CODES = STANDBY_CODES | BRIEFING_CODES
+
+HOME_BASE = "DUB"
 
 
 def close(c1, c2, tol=0.02):
@@ -63,7 +92,7 @@ def parse_page(page):
 
     weekday_names = {"Wed", "Thu", "Fri", "Sat", "Sun", "Mon", "Tue"}
     results = {}
-    for i, date in enumerate(col_dates):
+    for i, date_str in enumerate(col_dates):
         ws = sorted(days.get(i, []), key=lambda w: w["top"])
         tokens = [
             (w["text"].strip().strip("​"), w.get("non_stroking_color"))
@@ -71,7 +100,7 @@ def parse_page(page):
             if w["text"].strip().strip("​") not in weekday_names
             and w["text"].strip().strip("​") != ""
         ]
-        results[date] = parse_day(tokens)
+        results[date_str] = parse_day(tokens)
     return results
 
 
@@ -228,13 +257,213 @@ def parse_day(tokens):
     }
 
 
-def parse_roster_pdf(file_path):
-    """Parse every grid page of a roster PDF. Returns {date_str: day_result}."""
+# ---------------------------------------------------------------------------
+# LT -> UTC conversion (30/09) — added because roster times print local
+# time at each station, but the app's rule engine works only in UTC.
+# ---------------------------------------------------------------------------
+
+_AIRPORT_TZ_CACHE = None
+
+
+def _station_tz(code):
+    """Return the zoneinfo.ZoneInfo for an IATA station code, or None if
+    unknown (airportsdata doesn't have it, or code is missing/malformed)."""
+    global _AIRPORT_TZ_CACHE
+    if not code or not STATION_RE.match(code):
+        return None
+    if _AIRPORT_TZ_CACHE is None:
+        import airportsdata
+
+        _AIRPORT_TZ_CACHE = airportsdata.load("IATA")
+    from zoneinfo import ZoneInfo
+
+    airport = _AIRPORT_TZ_CACHE.get(code)
+    if not airport or not airport.get("tz"):
+        return None
+    return ZoneInfo(airport["tz"])
+
+
+def _to_utc(local_date, hhmm, station_code):
+    """Convert an HH:MM string, local to `station_code` on `local_date`,
+    to a UTC datetime. Returns None if the station's timezone is unknown
+    or hhmm doesn't parse — callers should not fail on that, just skip the
+    ...Utc field for that value."""
+    tz = _station_tz(station_code)
+    if tz is None or not hhmm or not TIME_RE.match(hhmm):
+        return None
+    hour, minute = (int(p) for p in hhmm.split(":"))
+    local_dt = datetime(local_date.year, local_date.month, local_date.day, hour, minute, tzinfo=tz)
+    return local_dt.astimezone(timezone.utc)
+
+
+def _day_sort_key(date_str, year):
+    day, month = (int(p) for p in date_str.split("/"))
+    # Rosters are usually a single month or span a month boundary forward
+    # (e.g. 28/06..05/07) — assume the year given applies to every date;
+    # cross-year rosters (Dec->Jan) aren't handled here, a known gap.
+    return (year, month, day)
+
+
+def resolve_utc_times(all_results, year, home_base=HOME_BASE):
+    """Walk the roster chronologically, tracking which station the pilot
+    is physically at, and add '...Utc' fields (ISO 8601, UTC) alongside
+    every existing LT field, without removing or changing the LT ones.
+
+    Simplifications, flagged here rather than hidden in the code:
+    - After a day off ('F'/'GL'), the pilot is assumed to be back at
+      `home_base` for whatever comes next — the roster doesn't say where
+      a pilot spends a day off, but for a Dublin-based pilot this is the
+      overwhelmingly common case.
+    - A leg without an explicit origin (the two token shapes that don't
+      carry one — a same-day departure continuing into the next day, or
+      an arrival continuing from the previous day) is assumed to depart
+      from wherever the pilot currently is, per the running station
+      tracker — this is exactly what "origin" means for those shapes.
+    - report/trailing times that aren't tied to a specific leg (e.g. a
+      report before the day's first leg, standby start/end) are localised
+      to the tracked "station at that point in the day" and are not
+      themselves allowed to roll the calendar date forward/back — only
+      leg off/on-block times are (see below). A report or finish very
+      close to local midnight is the one case this could misdate; no
+      case like that has been seen in Guillermo's real rosters so far.
+    """
+    ordered_keys = sorted(
+        (k for k in all_results if DATE_HEADER_RE.match(k)),
+        key=lambda k: _day_sort_key(k, year),
+    )
+
+    current_station = home_base
+    for key in ordered_keys:
+        entry = all_results[key]
+        if entry.get("status") not in ("ok", "needs_review"):
+            continue
+        if entry.get("kind") in DAY_OFF_CODES:
+            current_station = home_base
+            continue
+
+        day, month = (int(p) for p in key.split("/"))
+        local_date = date(year, month, day)
+        station_at_start = current_station
+
+        report_time = entry.get("reportTime")
+        if report_time:
+            report_utc = _to_utc(local_date, report_time, station_at_start)
+            if report_utc:
+                entry["reportTimeUtc"] = report_utc.isoformat()
+
+        for leg in entry.get("legs", []):
+            if leg.get("continuedFromPreviousDay"):
+                on_utc = _to_utc(local_date, leg.get("onBlock"), leg.get("destination"))
+                if on_utc:
+                    leg["onBlockUtc"] = on_utc.isoformat()
+                if leg.get("destination"):
+                    current_station = leg["destination"]
+                continue
+
+            origin = leg.get("origin") or current_station
+            off_utc = _to_utc(local_date, leg.get("offBlock"), origin)
+            if off_utc:
+                leg["offBlockUtc"] = off_utc.isoformat()
+
+            destination = leg.get("destination")
+            if leg.get("onBlock") and destination:
+                on_utc = _to_utc(local_date, leg["onBlock"], destination)
+                # A sector never takes >20h on this fleet — if the naive
+                # same-date conversion lands before departure (or absurdly
+                # close after it, implying it actually landed the next
+                # calendar day at destination), roll the local arrival
+                # date forward by one day and reconvert.
+                if on_utc and off_utc and on_utc <= off_utc:
+                    on_utc = _to_utc(local_date + timedelta(days=1), leg["onBlock"], destination)
+                if on_utc:
+                    leg["onBlockUtc"] = on_utc.isoformat()
+
+            if destination:
+                current_station = destination
+
+        for standby in entry.get("standbys", []):
+            start_utc = _to_utc(local_date, standby.get("start"), station_at_start)
+            if start_utc:
+                standby["startUtc"] = start_utc.isoformat()
+            end_utc = _to_utc(local_date, standby.get("end"), station_at_start)
+            if end_utc and start_utc and end_utc <= start_utc:
+                end_utc = _to_utc(local_date + timedelta(days=1), standby.get("end"), station_at_start)
+            if end_utc:
+                standby["endUtc"] = end_utc.isoformat()
+
+        trailing_time = entry.get("trailingTime")
+        if trailing_time:
+            trailing_utc = _to_utc(local_date, trailing_time, current_station)
+            if trailing_utc:
+                entry["trailingTimeUtc"] = trailing_utc.isoformat()
+
+    return all_results
+
+
+# ---------------------------------------------------------------------------
+# Overnight-duty stitching (30/09) — a duty the roster prints across two
+# day-rows (report on day N, arrival shown on day N+1) is completed on
+# BOTH rows so either one gives the app a full report+finish pair for the
+# same duty, instead of each being individually incomplete.
+# ---------------------------------------------------------------------------
+
+
+def stitch_overnight_duties(all_results, year):
+    ordered_keys = sorted(
+        (k for k in all_results if DATE_HEADER_RE.match(k)),
+        key=lambda k: _day_sort_key(k, year),
+    )
+
+    for idx, key in enumerate(ordered_keys):
+        entry = all_results[key]
+        if "continues_next_day" not in entry.get("flags", []):
+            continue
+        if idx + 1 >= len(ordered_keys):
+            continue
+        next_entry = all_results[ordered_keys[idx + 1]]
+        if "continuation_from_previous_day" not in next_entry.get("flags", []):
+            continue
+
+        arrival_leg = next((l for l in next_entry.get("legs", []) if l.get("continuedFromPreviousDay")), None)
+        if not arrival_leg or "onBlockUtc" not in arrival_leg:
+            continue
+
+        # Fill this day's missing finish with the continuation's arrival,
+        # and the continuation day's missing report with this day's
+        # original report — so both rows describe the same complete duty.
+        if not entry.get("trailingTimeUtc"):
+            entry["trailingTime"] = arrival_leg["onBlock"]
+            entry["trailingTimeUtc"] = arrival_leg["onBlockUtc"]
+            entry.setdefault("flags", []).append("finish_time_from_next_day")
+        if not next_entry.get("reportTimeUtc") and entry.get("reportTimeUtc"):
+            next_entry["reportTime"] = entry.get("reportTime")
+            next_entry["reportTimeUtc"] = entry["reportTimeUtc"]
+            next_entry.setdefault("flags", []).append("report_time_from_previous_day")
+
+    return all_results
+
+
+def parse_roster_pdf(file_path, year=None):
+    """Parse every grid page of a roster PDF. Returns {date_str: day_result}.
+
+    `year` (added 30/09): the calendar year to assume for every date in
+    the roster — needed to convert printed local times to UTC correctly,
+    since the offset depends on the exact date (DST). Defaults to the
+    current UTC year if not given, matching what the app's own year
+    picker defaults to.
+    """
     import pdfplumber
+
+    if year is None:
+        year = datetime.now(timezone.utc).year
 
     all_results = {}
     with pdfplumber.open(file_path) as pdf:
         for page in pdf.pages:
             page_results = parse_page(page)
             all_results.update(page_results)
+
+    resolve_utc_times(all_results, year)
+    stitch_overnight_duties(all_results, year)
+
     return all_results
