@@ -18,6 +18,12 @@ enum _A320FlightType { continental, intercontinental }
 /// fleet — flagged in its section of the form below.
 enum _PrecedingStandby { none, stbh, stba }
 
+/// A330 only for now (30/09) — the convenio has no STBA-equivalent for this
+/// fleet (only STBH and STBB, a multi-day reserve block not modelled by
+/// this screen), so this is a simpler none/stbh toggle rather than reusing
+/// [_PrecedingStandby].
+enum _A330PrecedingStandby { none, stbh }
+
 /// Second screen: enter a duty's report/end time (plus the handful of
 /// fleet-specific fields each rule needs) and check it against Maximum
 /// Flight Duty Time — R-14/R-15 (clause 3.11) for the A320/321, or
@@ -44,14 +50,16 @@ enum _PrecedingStandby { none, stbh, stba }
 /// duties that actually cross 0200-0559. Flagged in the UI and here for
 /// the next pass.
 ///
-/// **Preceding standby (29/09):** the A320/321 section asks whether the
-/// duty was preceded by a Standby at Home (STBH, counts at 50%, 3.17.2c)
-/// or a Standby at the Airport (STBA, counts in full, 2.16.1b), and if so,
-/// when that standby started. The elapsed time from there to report is
-/// passed straight to R-14/R-15 as `stbhPortion`/`stbaPortion` — each rule
-/// applies its own percentage downstream in `effectiveFlightDutyTime`, so
-/// this screen only computes the raw elapsed time, never the halved
-/// figure. Not yet available for the A330 — see the note above.
+/// **Preceding standby (29/09, A330 added 30/09):** the A320/321 section
+/// asks whether the duty was preceded by a Standby at Home (STBH, counts
+/// at 50%, 3.17.2c) or a Standby at the Airport (STBA, counts in full,
+/// 2.16.1b), and if so, when that standby started. The elapsed time from
+/// there to report is passed straight to R-14/R-15 as
+/// `stbhPortion`/`stbaPortion` — each rule applies its own percentage
+/// downstream in `effectiveFlightDutyTime`, so this screen only computes
+/// the raw elapsed time, never the halved figure. The A330 section (30/09)
+/// mirrors this with STBH only (3.16.4, also 50%) — the A330 convenio has
+/// no STBA-equivalent.
 class MaxDutyInputScreen extends StatefulWidget {
   const MaxDutyInputScreen({super.key, required this.fleet});
 
@@ -80,6 +88,9 @@ class _MaxDutyInputScreenState extends State<MaxDutyInputScreen> {
   TransatlanticDirection _direction = TransatlanticDirection.none;
   bool _throughTheNight = false;
   bool _agreedCockpitRestArea = true;
+  _A330PrecedingStandby _a330PrecedingStandby = _A330PrecedingStandby.none;
+  DateTime _a330StandbyStart =
+      DateTime.now().toUtc().subtract(const Duration(hours: 2));
 
   @override
   Widget build(BuildContext context) {
@@ -301,16 +312,57 @@ class _MaxDutyInputScreenState extends State<MaxDutyInputScreen> {
             onChanged: (value) =>
                 setState(() => _agreedCockpitRestArea = value),
           ),
+        const SizedBox(height: 16),
+        const Text('Preceded by standby (STBH)?',
+            style: TextStyle(fontWeight: FontWeight.bold)),
+        RadioListTile<_A330PrecedingStandby>(
+          title: const Text('None'),
+          value: _A330PrecedingStandby.none,
+          groupValue: _a330PrecedingStandby,
+          onChanged: (value) =>
+              setState(() => _a330PrecedingStandby = value!),
+        ),
+        RadioListTile<_A330PrecedingStandby>(
+          title: const Text('Standby at Home (STBH) — counts at 50% '
+              '(3.16.4)'),
+          value: _A330PrecedingStandby.stbh,
+          groupValue: _a330PrecedingStandby,
+          onChanged: (value) =>
+              setState(() => _a330PrecedingStandby = value!),
+        ),
+        if (_a330PrecedingStandby == _A330PrecedingStandby.stbh) ...[
+          const SizedBox(height: 4),
+          DateTimeField(
+            label: 'Standby start time (UTC)',
+            value: _a330StandbyStart,
+            onChanged: (value) =>
+                setState(() => _a330StandbyStart = value),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Elapsed: ${_fmtDuration(_a330StandbyElapsed)} — counts as '
+            '${_fmtDuration(Duration(minutes: _a330StandbyElapsed.inMinutes ~/ 2))} '
+            'towards the duty (50%).',
+            style: const TextStyle(fontSize: 12, color: Colors.black54),
+          ),
+        ],
         const SizedBox(height: 8),
         const Text(
           'Note: the fine-grained WOCL-encroachment settings (02:00-05:59) '
           "aren't on this screen yet — no encroachment is assumed for now. "
-          'A preceding standby (STBH/STBA) also isn\'t modelled for the '
-          'A330 yet. Coming in a future update.',
+          'The A330 has no STBA-equivalent (only STBH and STBB, a '
+          "multi-day reserve block); STBB isn't modelled on this screen.",
           style: TextStyle(fontSize: 12, color: Colors.black54),
         ),
       ],
     );
+  }
+
+  /// The raw time between the A330's preceding STBH and this duty's
+  /// report, never negative — mirrors [_standbyElapsed] for the A320/321.
+  Duration get _a330StandbyElapsed {
+    final elapsed = _report.difference(_a330StandbyStart);
+    return elapsed.isNegative ? Duration.zero : elapsed;
   }
 
   void _verify() {
@@ -376,6 +428,9 @@ class _MaxDutyInputScreenState extends State<MaxDutyInputScreen> {
       type: DutyType.flight,
       transatlanticDirection: _direction,
     );
+    final stbhPortion = _a330PrecedingStandby == _A330PrecedingStandby.stbh
+        ? _a330StandbyElapsed
+        : Duration.zero;
     return verifyA330MaxDuty(
       duty: duty,
       crewType: _crewType,
@@ -384,6 +439,7 @@ class _MaxDutyInputScreenState extends State<MaxDutyInputScreen> {
       direction:
           _direction == TransatlanticDirection.none ? null : _direction,
       throughTheNight: _throughTheNight,
+      stbhPortion: stbhPortion,
     );
   }
 }

@@ -514,4 +514,42 @@ void main() {
       );
     });
   });
+
+  group('A330 — Standby previous to the duty (3.16.4, 50% counted)', () {
+    final safeReport = DateTime(2026, 9, 29, 6, 35);
+    Duty dutyOf(Duration d) =>
+        Duty(report: safeReport, end: safeReport.add(d), type: DutyType.flight);
+
+    test('no standby: 12h00 duty green, 12h01 amber (unchanged baseline)',
+        () {
+      expect(
+        verifyA330MaxDuty(duty: dutyOf(const Duration(hours: 12))).color,
+        RuleColor.green,
+      );
+      expect(
+        verifyA330MaxDuty(
+          duty: dutyOf(const Duration(hours: 12, minutes: 1)),
+        ).color,
+        RuleColor.amber,
+      );
+    });
+
+    test('11h duty + 2h STBH (1h counted at 50%) = 12h effective: green',
+        () {
+      final result = verifyA330MaxDuty(
+        duty: dutyOf(const Duration(hours: 11)),
+        stbhPortion: const Duration(hours: 2),
+      );
+      expect(result.color, RuleColor.green);
+    });
+
+    test('11h duty + 2h02 STBH (1h01 counted) = 12h01 effective: amber',
+        () {
+      final result = verifyA330MaxDuty(
+        duty: dutyOf(const Duration(hours: 11)),
+        stbhPortion: const Duration(hours: 2, minutes: 2),
+      );
+      expect(result.color, RuleColor.amber);
+    });
+  });
 }

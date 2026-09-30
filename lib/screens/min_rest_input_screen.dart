@@ -11,6 +11,7 @@ import '../rules/a320/rest/r09.dart';
 import '../rules/a320/rest/r10.dart';
 import '../rules/a320/rest/r11.dart';
 import '../rules/a320/rest/r12.dart';
+import '../rules/a330/rest/after_standby.dart';
 import '../rules/a330/rest/base_continental.dart';
 import '../rules/a330/rest/outstation_after_eastbound.dart';
 import '../rules/a330/rest/outstation_continental.dart';
@@ -42,9 +43,10 @@ enum _A320RestScenario {
   preIntercontinental, // 2.10.6(a)/3.14.2(a)
 }
 
-/// The A330's clause 3.13 covers the same six situations minus the two
-/// A320/321-only ones (R-12's standby case and R-13's overnight-meal
-/// adjustment have no A330 equivalent).
+/// The A330's clause 3.13 covers the same situations as the A320/321
+/// minus R-13's overnight-meal adjustment (no A330 equivalent), plus its
+/// own after-standby rest floor (3.16.10, added 30/09 — flat 13h, no
+/// duty+2h formula like the A320/321's R-12).
 enum _A330RestScenario {
   baseContinental,
   outstationContinental,
@@ -52,6 +54,7 @@ enum _A330RestScenario {
   postIntercontinentalWestbound,
   outstationAfterEastbound,
   preIntercontinental,
+  afterStandby, // 3.16.10, added 30/09
 }
 
 const Map<_A320RestScenario, String> _a320ScenarioLabels = {
@@ -81,6 +84,7 @@ const Map<_A330RestScenario, String> _a330ScenarioLabels = {
   _A330RestScenario.outstationAfterEastbound:
       'At an outstation, after an eastbound Intercontinental (3.13)',
   _A330RestScenario.preIntercontinental: 'Before an Intercontinental (3.13)',
+  _A330RestScenario.afterStandby: 'After completing a Standby (3.16.10)',
 };
 
 /// Fourth screen (for Minimum Rest, Group B): enter the previous duty
@@ -129,8 +133,9 @@ class _MinRestInputScreenState extends State<MinRestInputScreen> {
 
   int _timeDifferenceHours = 0;
 
-  // R-12 (A320/321 only): whether a duty was actually assigned during the
-  // standby, per clause 3.17.5.
+  // Shared by both fleets' after-standby rest rule (A320/321 R-12, clause
+  // 3.17.5; A330, clause 3.16.10, added 30/09): whether a duty was
+  // actually assigned during the standby.
   bool _dutyAssignedDuringStandby = false;
 
   // Pre-intercontinental, both fleets.
@@ -235,6 +240,9 @@ class _MinRestInputScreenState extends State<MinRestInputScreen> {
         if (day.intercontinentalTimeDifferenceHours != null) {
           _timeDifferenceHours = day.intercontinentalTimeDifferenceHours!;
         }
+        if (detected == _A330RestScenario.afterStandby) {
+          _dutyAssignedDuringStandby = day.legs.isNotEmpty;
+        }
         _detectionNote = _noteFor(
           detected == null ? null : _a330ScenarioLabels[detected],
         );
@@ -293,7 +301,12 @@ class _MinRestInputScreenState extends State<MinRestInputScreen> {
   }
 
   _A330RestScenario? _detectA330Scenario(RosterDay day) {
-    if (day.legs.isEmpty) return null;
+    // Same reasoning as the A320/321 above: without any classified leg or
+    // standby for this day, the station/Intercontinental hints are
+    // unreliable — better to say nothing than guess from stale
+    // station-tracking state carried over from an earlier day.
+    if (day.legs.isEmpty && day.standbys.isEmpty) return null;
+    if (day.standbys.isNotEmpty) return _A330RestScenario.afterStandby;
     if (day.intercontinental) {
       // Same reasoning as the A320/321 above: base vs outstation decides
       // R-09/R-10-equivalent, not the leg's physical direction. A
@@ -560,6 +573,12 @@ class _MinRestInputScreenState extends State<MinRestInputScreen> {
         groupValue: _a330Scenario,
         onChanged: (value) => setState(() => _a330Scenario = value!),
       ),
+      RadioListTile<_A330RestScenario>(
+        title: Text(_a330ScenarioLabels[_A330RestScenario.afterStandby]!),
+        value: _A330RestScenario.afterStandby,
+        groupValue: _a330Scenario,
+        onChanged: (value) => setState(() => _a330Scenario = value!),
+      ),
       const SizedBox(height: 16),
       ..._buildA330Fields(),
     ];
@@ -569,6 +588,39 @@ class _MinRestInputScreenState extends State<MinRestInputScreen> {
     final needsTimeDifference = _a330Scenario ==
             _A330RestScenario.postIntercontinentalWestbound ||
         _a330Scenario == _A330RestScenario.outstationAfterEastbound;
+
+    if (_a330Scenario == _A330RestScenario.afterStandby) {
+      // Same shape as the A320/321's R-12 fields — reuses
+      // [_dutyAssignedDuringStandby], the field name doesn't imply a
+      // specific fleet.
+      return [
+        SwitchListTile(
+          title: const Text('A duty was assigned during the standby'),
+          value: _dutyAssignedDuringStandby,
+          onChanged: (v) => setState(() => _dutyAssignedDuringStandby = v),
+        ),
+        if (_dutyAssignedDuringStandby) ...[
+          DateTimeField(
+            label: 'Duty report time (UTC)',
+            value: _previousReport,
+            onChanged: (v) => setState(() => _previousReport = v),
+          ),
+          const SizedBox(height: 12),
+          DateTimeField(
+            label: 'Duty end time (UTC)',
+            value: _previousEnd,
+            onChanged: (v) => setState(() => _previousEnd = v),
+          ),
+        ] else
+          DateTimeField(
+            label: 'Standby end time (UTC)',
+            value: _previousEnd,
+            onChanged: (v) => setState(() => _previousEnd = v),
+          ),
+        const SizedBox(height: 12),
+        _buildNewReportField(),
+      ];
+    }
 
     return [
       DateTimeField(
@@ -637,6 +689,12 @@ class _MinRestInputScreenState extends State<MinRestInputScreen> {
           plannedRest: _plannedRest,
           precededByStandby: _precededByStandby,
           previousDuty: previousDuty,
+        );
+      case _A330RestScenario.afterStandby:
+        return verifyA330AfterStandbyRest(
+          plannedRest: _plannedRest,
+          dutyAssignedOnStandby:
+              _dutyAssignedDuringStandby ? previousDuty : null,
         );
     }
   }

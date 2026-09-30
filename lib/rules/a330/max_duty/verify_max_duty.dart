@@ -56,6 +56,15 @@ import '../../../models/rule_result.dart';
 /// Ops Manual Part A criteria are not available to this app. Beyond the
 /// convenio maximum but within the +2h discretion window → amber; beyond
 /// that → red.
+///
+/// **Standby previous to the duty (30/09):** per 3.16.4 ("Fifty percent of
+/// the expired portion of a standby duty shall be counted as flight duty
+/// time"), a preceding Standby at Home ([stbhPortion]) counts at 50% —
+/// same rule and same 50% figure as the A320/321's STBH (3.17.2c), applied
+/// here for the first time on the A330 side. The A330 convenio has no
+/// STBA-equivalent (only STBH and STBB, a multi-day reserve block not
+/// modelled here), so there is no separate 100%-counted portion like the
+/// A320/321's STBA.
 enum A330CrewType { twoPilot, augmented, heavy }
 
 RuleResult verifyA330MaxDuty({
@@ -68,6 +77,7 @@ RuleResult verifyA330MaxDuty({
   Duration woclEncroachment = Duration.zero,
   bool dutyStartsInWocl = false,
   bool extensionInvadesWocl = false,
+  Duration stbhPortion = Duration.zero,
 }) {
   Duration maximum;
   String clause;
@@ -152,40 +162,48 @@ RuleResult verifyA330MaxDuty({
       'simplification (the Ops Manual Part A, which may set different or '
       'additional criteria, is not available to this app).';
 
-  if (duty.duration <= maximum) {
+  // 3.16.4: half of a preceding STBH's expired duration counts towards this
+  // limit, on top of the duty's own actual duration.
+  final halvedStbh = Duration(minutes: stbhPortion.inMinutes ~/ 2);
+  final effectiveDuration = duty.duration + halvedStbh;
+  final stbhSuffix =
+      halvedStbh > Duration.zero ? ' (includes ${_fmt(halvedStbh)} from a preceding STBH, counted at 50%)' : '';
+
+  if (effectiveDuration <= maximum) {
     return RuleResult(
       color: RuleColor.green,
       clause: clause,
-      explanation: 'Flight duty time of ${_fmt(duty.duration)} is within '
-          'the maximum of ${_fmt(maximum)} ($detail).',
+      explanation: 'Flight duty time of ${_fmt(effectiveDuration)} is '
+          'within the maximum of ${_fmt(maximum)} ($detail)$stbhSuffix.',
       easaReference: easaReference,
-      marginToOwc: maximum - duty.duration,
-      marginToEasaLimit: discretionMaximum - duty.duration,
+      marginToOwc: maximum - effectiveDuration,
+      marginToEasaLimit: discretionMaximum - effectiveDuration,
     );
   }
 
-  if (duty.duration <= discretionMaximum) {
+  if (effectiveDuration <= discretionMaximum) {
     return RuleResult(
       color: RuleColor.amber,
       clause: clause,
-      explanation: 'Flight duty time of ${_fmt(duty.duration)} EXCEEDS the '
-          'normal maximum of ${_fmt(maximum)} ($detail), but is within '
+      explanation: 'Flight duty time of ${_fmt(effectiveDuration)} '
+          'EXCEEDS the normal maximum of ${_fmt(maximum)} '
+          '($detail)$stbhSuffix, but is within '
           "the EASA Commander's discretion limit of "
           '${_fmt(discretionMaximum)} (+2h, unforeseen circumstances '
           'only). This does not verify against the Ops Manual Part A '
           'limit.',
       easaReference: easaReference,
-      owcOverage: duty.duration - maximum,
-      marginToEasaLimit: discretionMaximum - duty.duration,
+      owcOverage: effectiveDuration - maximum,
+      marginToEasaLimit: discretionMaximum - effectiveDuration,
     );
   }
 
   return RuleResult(
     color: RuleColor.red,
     clause: clause,
-    explanation: 'Flight duty time of ${_fmt(duty.duration)} EXCEEDS even '
-        "the EASA Commander's discretion limit of "
-        '${_fmt(discretionMaximum)} ($detail).',
+    explanation: 'Flight duty time of ${_fmt(effectiveDuration)} EXCEEDS '
+        "even the EASA Commander's discretion limit of "
+        '${_fmt(discretionMaximum)} ($detail)$stbhSuffix.',
     easaReference: easaReference,
   );
 }
