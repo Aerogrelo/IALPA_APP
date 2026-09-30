@@ -256,19 +256,32 @@ class _MinRestInputScreenState extends State<MinRestInputScreen> {
   /// confidently — the pilot picks manually in that case, same as before
   /// roster import existed.
   _A320RestScenario? _detectA320Scenario(RosterDay day) {
+    // Without any classified leg or standby for this day, the station and
+    // Intercontinental hints are unreliable (they only get populated by
+    // walking actual legs/standbys) — better to say nothing than guess
+    // from stale station-tracking state carried over from an earlier day.
+    if (day.legs.isEmpty && day.standbys.isEmpty) return null;
     if (day.standbys.isNotEmpty) return _A320RestScenario.afterStandby;
     if (day.intercontinental) {
-      if (day.transatlanticDirection == 'westbound' &&
-          day.finishStation == 'DUB') {
+      // R-09 vs R-10 are distinguished by WHERE the rest is taken (at
+      // base vs at an outstation), not by the physical compass direction
+      // of the specific leg that day — "Westbound"/"Eastbound" in the
+      // clause names the whole pairing, not this leg. A same-day round
+      // trip (out and back to base in one day) is neither: it's R-11,
+      // with its own lower minimum, and misreading it as R-09 would
+      // quietly apply the wrong (higher) floor.
+      final sameDayReturn = day.legs.length >= 2 &&
+          day.reportStation == 'DUB' &&
+          day.finishStation == 'DUB';
+      if (sameDayReturn) {
+        return _A320RestScenario.postIntercontinentalSameDay;
+      }
+      if (day.finishStation == 'DUB') {
         return _A320RestScenario.postWestboundTransatlantic;
       }
-      if (day.transatlanticDirection == 'eastbound' &&
-          day.finishStation != null &&
-          day.finishStation != 'DUB') {
+      if (day.finishStation != null) {
         return _A320RestScenario.outstationAfterEastboundTransatlantic;
       }
-      // Same-day intercontinental return, or direction/station unclear —
-      // needs a human to confirm.
       return null;
     }
     if (_isThroughTheNight(day) && day.finishStation == 'DUB') {
@@ -280,14 +293,21 @@ class _MinRestInputScreenState extends State<MinRestInputScreen> {
   }
 
   _A330RestScenario? _detectA330Scenario(RosterDay day) {
+    if (day.legs.isEmpty) return null;
     if (day.intercontinental) {
-      if (day.transatlanticDirection == 'westbound' &&
-          day.finishStation == 'DUB') {
+      // Same reasoning as the A320/321 above: base vs outstation decides
+      // R-09/R-10-equivalent, not the leg's physical direction. A
+      // same-day round trip has no dedicated A330 scenario on this
+      // screen, so it's left for the pilot to pick manually rather than
+      // guessed at.
+      final sameDayReturn = day.legs.length >= 2 &&
+          day.reportStation == 'DUB' &&
+          day.finishStation == 'DUB';
+      if (sameDayReturn) return null;
+      if (day.finishStation == 'DUB') {
         return _A330RestScenario.postIntercontinentalWestbound;
       }
-      if (day.transatlanticDirection == 'eastbound' &&
-          day.finishStation != null &&
-          day.finishStation != 'DUB') {
+      if (day.finishStation != null) {
         return _A330RestScenario.outstationAfterEastbound;
       }
       return null;
