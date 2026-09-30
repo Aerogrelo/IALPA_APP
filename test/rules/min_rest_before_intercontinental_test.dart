@@ -145,4 +145,72 @@ void main() {
       expect(atFloor.color, RuleColor.amber);
     });
   });
+
+  group('Clause 2.10.6(a) — previous day duty must not start before 06:00 LT '
+      '(2026-09-30)', () {
+    // A duty that would otherwise be green on rest length alone.
+    final shortDuty = Duty(
+      report: DateTime(2026, 9, 28, 6, 0),
+      end: DateTime(2026, 9, 28, 15, 0), // 9h
+      type: DutyType.flight,
+    );
+
+    test('report at 05:59 LT breaches 2.10.6(a): downgrades an otherwise '
+        'green result to amber', () {
+      final result = verifyMinRestBeforeIntercontinental(
+        previousDayDuty: shortDuty,
+        plannedRest: const Duration(hours: 12), // would be green alone
+        previousDayReportLocal: DateTime(2026, 9, 28, 5, 59),
+      );
+      expect(result.color, RuleColor.amber);
+      expect(result.explanation, contains('2.10.6(a)'));
+    });
+
+    test('report at exactly 06:00 LT does NOT breach 2.10.6(a): stays '
+        'green', () {
+      final result = verifyMinRestBeforeIntercontinental(
+        previousDayDuty: shortDuty,
+        plannedRest: const Duration(hours: 12),
+        previousDayReportLocal: DateTime(2026, 9, 28, 6, 0),
+      );
+      expect(result.color, RuleColor.green);
+    });
+
+    test('report before 06:00 LT never improves an already-red result: '
+        'still red', () {
+      final result = verifyMinRestBeforeIntercontinental(
+        previousDayDuty: shortDuty,
+        plannedRest: const Duration(hours: 11, minutes: 59), // red alone
+        previousDayReportLocal: DateTime(2026, 9, 28, 5, 30),
+      );
+      expect(result.color, RuleColor.red);
+      expect(result.explanation, contains('2.10.6(a)'));
+    });
+
+    test('report before 06:00 LT does not change an already-amber result: '
+        'still amber, note appended', () {
+      final dutyOverThreshold = Duty(
+        report: DateTime(2026, 9, 28, 6, 0),
+        end: DateTime(2026, 9, 28, 17, 0), // 11h
+        type: DutyType.flight,
+      );
+      final result = verifyMinRestBeforeIntercontinental(
+        previousDayDuty: dutyOverThreshold,
+        plannedRest: const Duration(hours: 13, minutes: 47), // amber alone
+        previousDayReportLocal: DateTime(2026, 9, 28, 5, 0),
+      );
+      expect(result.color, RuleColor.amber);
+      expect(result.explanation, contains('2.10.6(a)'));
+    });
+
+    test('omitting previousDayReportLocal skips the check entirely: '
+        'unchanged from the rest-length-only result', () {
+      final result = verifyMinRestBeforeIntercontinental(
+        previousDayDuty: shortDuty,
+        plannedRest: const Duration(hours: 12),
+      );
+      expect(result.color, RuleColor.green);
+      expect(result.explanation, isNot(contains('2.10.6(a)')));
+    });
+  });
 }

@@ -3,12 +3,14 @@ import 'package:flutter/material.dart';
 import 'change_of_duty_input_screen.dart';
 import 'fleet_selection_screen.dart';
 import 'max_duty_input_screen.dart';
+import 'min_rest_input_screen.dart';
 
 /// Second screen: once a fleet is chosen, which convenio group to check.
 ///
 /// Added 29/09 when Change of Duty (Group A) became the second available
 /// check, alongside the existing Maximum Duty (Group D) — this screen is
 /// what makes room for that choice without cluttering fleet selection.
+/// Minimum Rest (Group B) added 30/09.
 class CheckTypeScreen extends StatelessWidget {
   const CheckTypeScreen({super.key, required this.fleet});
 
@@ -47,6 +49,17 @@ class CheckTypeScreen extends StatelessWidget {
                 onPressed: () => Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (_) => ChangeOfDutyInputScreen(fleet: fleet),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              _CheckTypeButton(
+                label: 'Minimum Rest',
+                subtitle: 'Clause 3.14/3.13 (plus 2.10.6a) — does the rest '
+                    'between two duties meet the required minimum?',
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => MinRestInputScreen(fleet: fleet),
                   ),
                 ),
               ),

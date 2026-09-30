@@ -8,6 +8,7 @@ import '../rules/a330/max_duty/verify_max_duty.dart';
 import 'fleet_selection_screen.dart';
 import 'result_screen.dart';
 import 'widgets/date_time_field.dart';
+import 'widgets/roster_import_button.dart';
 
 enum _A320FlightType { continental, intercontinental }
 
@@ -89,6 +90,16 @@ class _MaxDutyInputScreenState extends State<MaxDutyInputScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          // 29/09: fills report/end from the pilot's roster PDF instead
+          // of typing it in — same roster-import service used on the
+          // Change of Duty screen.
+          RosterImportButton(
+            onImported: (report, finish) => setState(() {
+              _report = report;
+              _end = finish;
+            }),
+          ),
+          const SizedBox(height: 16),
           DateTimeField(
             label: 'Start time (report, UTC)',
             value: _report,

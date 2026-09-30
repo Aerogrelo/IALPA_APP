@@ -15,6 +15,7 @@ import '../rules/a330/change_of_duty/verify_change_at_outstation_day_of_operatio
 import 'fleet_selection_screen.dart';
 import 'result_screen.dart';
 import 'widgets/date_time_field.dart';
+import 'widgets/roster_import_button.dart';
 
 /// A320/321 clause 3.2 is organised as Continental (3.2.3) /
 /// Intercontinental (3.2.4), each with several situations — one per rule
@@ -95,6 +96,19 @@ class _ChangeOfDutyInputScreenState extends State<ChangeOfDutyInputScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          // 29/09: fills the ORIGINAL report/finish time from the
+          // pilot's roster PDF instead of typing it — the airline's
+          // proposed NEW time still has to be entered by hand, since
+          // that's not on the roster. Sets both fields regardless of
+          // which the selected situation actually uses; the unused one
+          // is simply ignored when verifying.
+          RosterImportButton(
+            onImported: (report, finish) => setState(() {
+              _originalReport = report;
+              _originalFinish = finish;
+            }),
+          ),
+          const SizedBox(height: 16),
           if (widget.fleet == Fleet.a320) ..._buildA320Form(),
           if (widget.fleet == Fleet.a330) ..._buildA330Form(),
           const SizedBox(height: 32),
