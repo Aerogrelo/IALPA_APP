@@ -442,6 +442,20 @@ def resolve_utc_times(all_results, year, home_base=HOME_BASE):
             if destination:
                 current_station = destination
 
+        # Catch-all (30/09, later the same day): the per-leg check above
+        # only fires for a "regular" leg — an overnight leg that continues
+        # onto the next day's row (the 'continuedFromPreviousDay' branch)
+        # returns early and skips it. Rather than special-case every token
+        # shape, this checks the day's overall start/end station instead:
+        # if the pilot started or ended the day at an Intercontinental
+        # station, the day counts as Intercontinental regardless of which
+        # branch parsed its legs. Confirmed against a real overnight
+        # DUB<->PHL crossing that the per-leg check alone was missing.
+        if _is_intercontinental_station(station_at_start) or _is_intercontinental_station(
+            current_station
+        ):
+            intercontinental = True
+
         entry["intercontinental"] = intercontinental
 
         for standby in entry.get("standbys", []):
