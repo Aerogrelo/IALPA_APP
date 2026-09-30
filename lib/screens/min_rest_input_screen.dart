@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/duty.dart';
+import '../models/roster_day.dart';
 import '../models/rule_result.dart';
 import '../rules/a320/rest/min_rest_before_intercontinental.dart';
 import '../rules/a320/rest/r06.dart';
@@ -53,6 +54,35 @@ enum _A330RestScenario {
   preIntercontinental,
 }
 
+const Map<_A320RestScenario, String> _a320ScenarioLabels = {
+  _A320RestScenario.base: 'At base, after Continental/Canary Is. (3.14.1a)',
+  _A320RestScenario.outstation: 'At an outstation (3.14.1b)',
+  _A320RestScenario.throughTheNight:
+      'After a through-the-night duty (3.14.1c)',
+  _A320RestScenario.postWestboundTransatlantic:
+      'After a westbound Transatlantic (3.14.2b)',
+  _A320RestScenario.outstationAfterEastboundTransatlantic:
+      'At an outstation, after eastbound Transatlantic (3.14.2e)',
+  _A320RestScenario.postIntercontinentalSameDay:
+      'After an Intercontinental returning same day (3.14.3b)',
+  _A320RestScenario.afterStandby: 'After completing a Standby (3.17.5)',
+  _A320RestScenario.preIntercontinental:
+      'Day before an Intercontinental (2.10.6a / 3.14.2a)',
+};
+
+const Map<_A330RestScenario, String> _a330ScenarioLabels = {
+  _A330RestScenario.baseContinental: 'At base, after a Continental duty (3.13)',
+  _A330RestScenario.outstationContinental:
+      'At an outstation, Continental (3.13)',
+  _A330RestScenario.throughTheNight:
+      'After a through-the-night duty (3.13)',
+  _A330RestScenario.postIntercontinentalWestbound:
+      'After a westbound Intercontinental (3.13.2)',
+  _A330RestScenario.outstationAfterEastbound:
+      'At an outstation, after an eastbound Intercontinental (3.13)',
+  _A330RestScenario.preIntercontinental: 'Before an Intercontinental (3.13)',
+};
+
 /// Fourth screen (for Minimum Rest, Group B): enter the previous duty
 /// (or standby) and the start of the next one, and check the rest taken
 /// in between against clause 3.14 (A320/321) / 3.13 (A330), plus 2.10.6(a)
@@ -62,6 +92,19 @@ enum _A330RestScenario {
 /// then only the fields that scenario's rule actually needs are shown.
 /// Unlike Change of Duty, these rules CAN resolve to red — a rest breach
 /// can be a genuine EASA/safety issue, not just a contractual one.
+///
+/// 30/09 (later the same day, Elena's request): importing a day from the
+/// roster now also tries to AUTO-DETECT which situation applies — base
+/// vs. outstation, Continental vs. Intercontinental, direction — using
+/// the station and Intercontinental hints the roster service now sends
+/// per day (see [RosterDay]). The detected situation is only ever a
+/// pre-selected suggestion shown in a banner: the radio list right below
+/// it is unchanged and always overridable, because this screen checks
+/// legal/contractual compliance and should never be a silent black box.
+/// Detection deliberately does NOT cover "day before an Intercontinental"
+/// (2.10.6a) or "Intercontinental returning same day" (R-11) — both need
+/// to look at a *different* day's duty than the one being imported, which
+/// this screen doesn't fetch yet; those stay manual-only for now.
 class MinRestInputScreen extends StatefulWidget {
   const MinRestInputScreen({super.key, required this.fleet});
 
@@ -102,6 +145,10 @@ class _MinRestInputScreenState extends State<MinRestInputScreen> {
   DateTime _previousDayReportLocal =
       DateTime.now().toUtc().subtract(const Duration(hours: 28));
 
+  // Set after a roster import, explaining what (if anything) was
+  // auto-detected — shown as a banner above the situation picker.
+  String? _detectionNote;
+
   @override
   Widget build(BuildContext context) {
     final fleetLabel = widget.fleet == Fleet.a320 ? 'A320/321' : 'A330';
@@ -112,13 +159,19 @@ class _MinRestInputScreenState extends State<MinRestInputScreen> {
         padding: const EdgeInsets.all(16),
         children: [
           // Fills the previous duty's report/end from the roster instead
-          // of typing it in — same service used on the other two screens.
+          // of typing it in, and — when the imported day gives enough
+          // information — pre-selects the matching situation below.
           RosterImportButton(
             onImported: (report, finish) => setState(() {
               _previousReport = report;
               _previousEnd = finish;
             }),
+            onImportedDay: _onRosterDayImported,
           ),
+          if (_detectionNote != null) ...[
+            const SizedBox(height: 12),
+            _buildDetectionBanner(),
+          ],
           const SizedBox(height: 16),
           if (widget.fleet == Fleet.a320) ..._buildA320Form(),
           if (widget.fleet == Fleet.a330) ..._buildA330Form(),
@@ -132,6 +185,134 @@ class _MinRestInputScreenState extends State<MinRestInputScreen> {
     );
   }
 
+  Widget _buildDetectionBanner() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.blue.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.blue.shade200),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.info_outline, size: 18, color: Colors.blue.shade700),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              _detectionNote!,
+              style: TextStyle(fontSize: 13, color: Colors.blue.shade900),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------
+  // Auto-detection from an imported roster day (30/09)
+  // ---------------------------------------------------------------------
+
+  void _onRosterDayImported(RosterDay day) {
+    if (widget.fleet == Fleet.a320) {
+      final detected = _detectA320Scenario(day);
+      setState(() {
+        if (detected != null) _a320Scenario = detected;
+        if (day.intercontinentalTimeDifferenceHours != null) {
+          _timeDifferenceHours = day.intercontinentalTimeDifferenceHours!;
+        }
+        if (detected == _A320RestScenario.afterStandby) {
+          _dutyAssignedDuringStandby = day.legs.isNotEmpty;
+        }
+        _detectionNote = _noteFor(
+          detected == null ? null : _a320ScenarioLabels[detected],
+        );
+      });
+    } else {
+      final detected = _detectA330Scenario(day);
+      setState(() {
+        if (detected != null) _a330Scenario = detected;
+        if (day.intercontinentalTimeDifferenceHours != null) {
+          _timeDifferenceHours = day.intercontinentalTimeDifferenceHours!;
+        }
+        _detectionNote = _noteFor(
+          detected == null ? null : _a330ScenarioLabels[detected],
+        );
+      });
+    }
+  }
+
+  String _noteFor(String? detectedLabel) {
+    if (detectedLabel == null) {
+      return 'Couldn\'t auto-detect the situation for this day from the '
+          'roster — please pick it manually below.';
+    }
+    return 'Detected from the roster: $detectedLabel. Check it matches, or '
+        'pick a different situation below if not.';
+  }
+
+  /// Best-guess situation for the A320/321 from a roster day's station and
+  /// Intercontinental hints. Returns null when it can't be determined
+  /// confidently — the pilot picks manually in that case, same as before
+  /// roster import existed.
+  _A320RestScenario? _detectA320Scenario(RosterDay day) {
+    if (day.standbys.isNotEmpty) return _A320RestScenario.afterStandby;
+    if (day.intercontinental) {
+      if (day.transatlanticDirection == 'westbound' &&
+          day.finishStation == 'DUB') {
+        return _A320RestScenario.postWestboundTransatlantic;
+      }
+      if (day.transatlanticDirection == 'eastbound' &&
+          day.finishStation != null &&
+          day.finishStation != 'DUB') {
+        return _A320RestScenario.outstationAfterEastboundTransatlantic;
+      }
+      // Same-day intercontinental return, or direction/station unclear —
+      // needs a human to confirm.
+      return null;
+    }
+    if (_isThroughTheNight(day) && day.finishStation == 'DUB') {
+      return _A320RestScenario.throughTheNight;
+    }
+    if (day.finishStation == 'DUB') return _A320RestScenario.base;
+    if (day.finishStation != null) return _A320RestScenario.outstation;
+    return null;
+  }
+
+  _A330RestScenario? _detectA330Scenario(RosterDay day) {
+    if (day.intercontinental) {
+      if (day.transatlanticDirection == 'westbound' &&
+          day.finishStation == 'DUB') {
+        return _A330RestScenario.postIntercontinentalWestbound;
+      }
+      if (day.transatlanticDirection == 'eastbound' &&
+          day.finishStation != null &&
+          day.finishStation != 'DUB') {
+        return _A330RestScenario.outstationAfterEastbound;
+      }
+      return null;
+    }
+    if (_isThroughTheNight(day) && day.finishStation == 'DUB') {
+      return _A330RestScenario.throughTheNight;
+    }
+    if (day.finishStation == 'DUB') return _A330RestScenario.baseContinental;
+    if (day.finishStation != null) {
+      return _A330RestScenario.outstationContinental;
+    }
+    return null;
+  }
+
+  bool _isThroughTheNight(RosterDay day) {
+    final suggestion = day.suggestedTimes();
+    if (suggestion == null) return false;
+    final probe = Duty(
+      report: suggestion.report,
+      end: suggestion.finish,
+      type: DutyType.flight,
+    );
+    return probe.isThroughTheNight;
+  }
+
   // ---------------------------------------------------------------------
   // A320/321
   // ---------------------------------------------------------------------
@@ -140,52 +321,53 @@ class _MinRestInputScreenState extends State<MinRestInputScreen> {
     return [
       const Text('Situation', style: TextStyle(fontWeight: FontWeight.bold)),
       RadioListTile<_A320RestScenario>(
-        title: const Text('At base, after Continental/Canary Is. (3.14.1a)'),
+        title: Text(_a320ScenarioLabels[_A320RestScenario.base]!),
         value: _A320RestScenario.base,
         groupValue: _a320Scenario,
         onChanged: (value) => setState(() => _a320Scenario = value!),
       ),
       RadioListTile<_A320RestScenario>(
-        title: const Text('At an outstation (3.14.1b)'),
+        title: Text(_a320ScenarioLabels[_A320RestScenario.outstation]!),
         value: _A320RestScenario.outstation,
         groupValue: _a320Scenario,
         onChanged: (value) => setState(() => _a320Scenario = value!),
       ),
       RadioListTile<_A320RestScenario>(
-        title: const Text('After a through-the-night duty (3.14.1c)'),
+        title: Text(_a320ScenarioLabels[_A320RestScenario.throughTheNight]!),
         value: _A320RestScenario.throughTheNight,
         groupValue: _a320Scenario,
         onChanged: (value) => setState(() => _a320Scenario = value!),
       ),
       RadioListTile<_A320RestScenario>(
-        title: const Text('After a westbound Transatlantic (3.14.2b)'),
+        title: Text(
+            _a320ScenarioLabels[_A320RestScenario.postWestboundTransatlantic]!),
         value: _A320RestScenario.postWestboundTransatlantic,
         groupValue: _a320Scenario,
         onChanged: (value) => setState(() => _a320Scenario = value!),
       ),
       RadioListTile<_A320RestScenario>(
-        title: const Text(
-            'At an outstation, after eastbound Transatlantic (3.14.2e)'),
+        title: Text(_a320ScenarioLabels[
+            _A320RestScenario.outstationAfterEastboundTransatlantic]!),
         value: _A320RestScenario.outstationAfterEastboundTransatlantic,
         groupValue: _a320Scenario,
         onChanged: (value) => setState(() => _a320Scenario = value!),
       ),
       RadioListTile<_A320RestScenario>(
-        title: const Text(
-            'After an Intercontinental returning same day (3.14.3b)'),
+        title: Text(
+            _a320ScenarioLabels[_A320RestScenario.postIntercontinentalSameDay]!),
         value: _A320RestScenario.postIntercontinentalSameDay,
         groupValue: _a320Scenario,
         onChanged: (value) => setState(() => _a320Scenario = value!),
       ),
       RadioListTile<_A320RestScenario>(
-        title: const Text('After completing a Standby (3.17.5)'),
+        title: Text(_a320ScenarioLabels[_A320RestScenario.afterStandby]!),
         value: _A320RestScenario.afterStandby,
         groupValue: _a320Scenario,
         onChanged: (value) => setState(() => _a320Scenario = value!),
       ),
       RadioListTile<_A320RestScenario>(
-        title: const Text(
-            'Day before an Intercontinental (2.10.6a / 3.14.2a)'),
+        title:
+            Text(_a320ScenarioLabels[_A320RestScenario.preIntercontinental]!),
         value: _A320RestScenario.preIntercontinental,
         groupValue: _a320Scenario,
         onChanged: (value) => setState(() => _a320Scenario = value!),
@@ -319,38 +501,41 @@ class _MinRestInputScreenState extends State<MinRestInputScreen> {
     return [
       const Text('Situation', style: TextStyle(fontWeight: FontWeight.bold)),
       RadioListTile<_A330RestScenario>(
-        title: const Text('At base, after a Continental duty (3.13)'),
+        title: Text(_a330ScenarioLabels[_A330RestScenario.baseContinental]!),
         value: _A330RestScenario.baseContinental,
         groupValue: _a330Scenario,
         onChanged: (value) => setState(() => _a330Scenario = value!),
       ),
       RadioListTile<_A330RestScenario>(
-        title: const Text('At an outstation, Continental (3.13)'),
+        title:
+            Text(_a330ScenarioLabels[_A330RestScenario.outstationContinental]!),
         value: _A330RestScenario.outstationContinental,
         groupValue: _a330Scenario,
         onChanged: (value) => setState(() => _a330Scenario = value!),
       ),
       RadioListTile<_A330RestScenario>(
-        title: const Text('After a through-the-night duty (3.13)'),
+        title: Text(_a330ScenarioLabels[_A330RestScenario.throughTheNight]!),
         value: _A330RestScenario.throughTheNight,
         groupValue: _a330Scenario,
         onChanged: (value) => setState(() => _a330Scenario = value!),
       ),
       RadioListTile<_A330RestScenario>(
-        title: const Text('After a westbound Intercontinental (3.13.2)'),
+        title: Text(_a330ScenarioLabels[
+            _A330RestScenario.postIntercontinentalWestbound]!),
         value: _A330RestScenario.postIntercontinentalWestbound,
         groupValue: _a330Scenario,
         onChanged: (value) => setState(() => _a330Scenario = value!),
       ),
       RadioListTile<_A330RestScenario>(
-        title: const Text(
-            'At an outstation, after an eastbound Intercontinental (3.13)'),
+        title: Text(
+            _a330ScenarioLabels[_A330RestScenario.outstationAfterEastbound]!),
         value: _A330RestScenario.outstationAfterEastbound,
         groupValue: _a330Scenario,
         onChanged: (value) => setState(() => _a330Scenario = value!),
       ),
       RadioListTile<_A330RestScenario>(
-        title: const Text('Before an Intercontinental (3.13)'),
+        title:
+            Text(_a330ScenarioLabels[_A330RestScenario.preIntercontinental]!),
         value: _A330RestScenario.preIntercontinental,
         groupValue: _a330Scenario,
         onChanged: (value) => setState(() => _a330Scenario = value!),

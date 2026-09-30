@@ -12,6 +12,16 @@
 /// parallel set of `...Utc` fields (ISO 8601). This model reads the UTC
 /// fields for anything that will feed the rule engine, and keeps the LT
 /// strings only for showing the pilot what they'd expect to see.
+///
+/// 30/09 (later the same day): also reads `reportStation`, `finishStation`,
+/// `intercontinental`, `transatlanticDirection` and
+/// `intercontinentalTimeDifferenceHours` — hints the service now computes
+/// per day (tracking which station the pilot is at, and whether any leg
+/// that day touches Aer Lingus's Intercontinental network) so the app can
+/// pre-select the applicable Minimum Rest scenario instead of asking the
+/// pilot to pick it every time. These are hints, not verdicts: the app
+/// shows what was detected and always lets the pilot correct it — see
+/// `min_rest_input_screen.dart`.
 class RosterDay {
   RosterDay({
     required this.status,
@@ -23,6 +33,11 @@ class RosterDay {
     required this.legs,
     required this.standbys,
     required this.flags,
+    this.reportStation,
+    this.finishStation,
+    this.intercontinental = false,
+    this.transatlanticDirection,
+    this.intercontinentalTimeDifferenceHours,
   });
 
   factory RosterDay.fromJson(Map<String, dynamic> json) {
@@ -38,6 +53,12 @@ class RosterDay {
       standbys: (json['standbys'] as List?)?.cast<Map<String, dynamic>>() ??
           const <Map<String, dynamic>>[],
       flags: (json['flags'] as List?)?.cast<String>() ?? const <String>[],
+      reportStation: json['reportStation'] as String?,
+      finishStation: json['finishStation'] as String?,
+      intercontinental: json['intercontinental'] as bool? ?? false,
+      transatlanticDirection: json['transatlanticDirection'] as String?,
+      intercontinentalTimeDifferenceHours:
+          json['intercontinentalTimeDifferenceHours'] as int?,
     );
   }
 
@@ -50,6 +71,29 @@ class RosterDay {
   final List<Map<String, dynamic>> legs;
   final List<Map<String, dynamic>> standbys;
   final List<String> flags;
+
+  /// Where the pilot physically is at the start of this day's duty (or
+  /// standby), e.g. 'DUB'. Null if the service couldn't resolve it.
+  final String? reportStation;
+
+  /// Where the pilot ends up by the end of this day's duty. Comparing
+  /// this to `reportStation`/home base is how "at base" vs "at an
+  /// outstation" is detected — matching how the Working Conditions
+  /// themselves define those terms (3.14.1(a)/(b) A320/321, 3.13 A330).
+  final String? finishStation;
+
+  /// Whether any leg this day touches Aer Lingus's Intercontinental
+  /// (transatlantic) network.
+  final bool intercontinental;
+
+  /// 'westbound' | 'eastbound' | null (not an Intercontinental day, or
+  /// direction couldn't be resolved).
+  final String? transatlanticDirection;
+
+  /// Rounded hours of time-zone difference for the Intercontinental leg,
+  /// when applicable — feeds the same field the rest screens already ask
+  /// the pilot for by hand.
+  final int? intercontinentalTimeDifferenceHours;
 
   static DateTime? _parseUtc(dynamic value) {
     if (value is! String) return null;

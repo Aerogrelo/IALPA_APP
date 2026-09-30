@@ -31,11 +31,27 @@ import '../../services/roster_service.dart';
 /// and [RosterDay]), so the times handed to [onImported] are always
 /// correct UTC `DateTime`s, and the picker shows both LT and UTC so the
 /// pilot can check it against their own roster at a glance.
+///
+/// 30/09 (later the same day): added the optional [onImportedDay]
+/// callback, which — if provided — also hands back the full [RosterDay]
+/// that was picked (station, Intercontinental/direction/time-difference
+/// hints), so a caller like [MinRestInputScreen] can auto-detect which
+/// rest scenario applies instead of asking the pilot to pick it. Existing
+/// callers that don't need this (Maximum Duty, Change of Duty) are
+/// unaffected — they only ever set [onImported].
 class RosterImportButton extends StatefulWidget {
-  const RosterImportButton({super.key, required this.onImported});
+  const RosterImportButton({
+    super.key,
+    required this.onImported,
+    this.onImportedDay,
+  });
 
   /// Called with the chosen day's report and finish time (UTC).
   final void Function(DateTime report, DateTime finish) onImported;
+
+  /// Called (in addition to [onImported]) with the full parsed day, for
+  /// callers that want to auto-detect a scenario from it.
+  final void Function(RosterDay day)? onImportedDay;
 
   @override
   State<RosterImportButton> createState() => _RosterImportButtonState();
@@ -80,7 +96,8 @@ class _RosterImportButtonState extends State<RosterImportButton> {
         year: initialYear,
       );
       if (!mounted) return;
-      final picked = await showDialog<({DateTime report, DateTime finish})>(
+      final picked =
+          await showDialog<({DateTime report, DateTime finish, RosterDay day})>(
         context: context,
         builder: (_) => _RosterDayPickerDialog(
           bytes: file.bytes!,
@@ -91,6 +108,7 @@ class _RosterImportButtonState extends State<RosterImportButton> {
       );
       if (picked != null) {
         widget.onImported(picked.report, picked.finish);
+        widget.onImportedDay?.call(picked.day);
       }
     } catch (e) {
       if (mounted) {
@@ -241,8 +259,11 @@ class _RosterDayPickerDialogState extends State<_RosterDayPickerDialog> {
       enabled: suggestion != null,
       onTap: suggestion == null
           ? null
-          : () => Navigator.of(context)
-              .pop((report: suggestion.report, finish: suggestion.finish)),
+          : () => Navigator.of(context).pop((
+                report: suggestion.report,
+                finish: suggestion.finish,
+                day: day,
+              )),
     );
   }
 

@@ -33,6 +33,15 @@ not directly usable:
 Both passes are best-effort: known simplifications are noted inline, and
 anything that can't be resolved confidently is left as-is rather than
 guessed (same principle as the token parser below).
+
+30/09 (later the same day): a third pass, `annotate_scenario_hints`, adds
+per-day fields the app uses to AUTO-DETECT which Minimum Rest scenario
+applies (base/outstation, continental/intercontinental, direction, time
+difference) instead of making the pilot pick it from a list every time —
+Elena's request, to cut down on manual selection now that the roster
+already carries this information. These are hints, not verdicts: the app
+still shows what was detected and lets the pilot correct it before
+verifying, same "never silently guess" principle as everything else here.
 """
 
 import re
@@ -52,6 +61,14 @@ BRIEFING_CODES = {"BR"}  # briefing after a long gap not flying to a station; co
 DUTY_BLOCK_CODES = STANDBY_CODES | BRIEFING_CODES
 
 HOME_BASE = "DUB"
+
+# Countries Aer Lingus's Intercontinental (transatlantic) network reaches.
+# Everything else the airline flies to is Continental in the sense the
+# Working Conditions use the word. A small, explicit set rather than a
+# general continent library, because this airline's actual route network
+# only crosses into "Intercontinental" for North America — if that ever
+# changes (a new long-haul destination), this is the one place to update.
+INTERCONTINENTAL_COUNTRIES = {"US", "CA"}
 
 
 def close(c1, c2, tol=0.02):
@@ -265,9 +282,8 @@ def parse_day(tokens):
 _AIRPORT_TZ_CACHE = None
 
 
-def _station_tz(code):
-    """Return the zoneinfo.ZoneInfo for an IATA station code, or None if
-    unknown (airportsdata doesn't have it, or code is missing/malformed)."""
+def _airport(code):
+    """Return the airportsdata record for an IATA station code, or None."""
     global _AIRPORT_TZ_CACHE
     if not code or not STATION_RE.match(code):
         return None
@@ -275,12 +291,27 @@ def _station_tz(code):
         import airportsdata
 
         _AIRPORT_TZ_CACHE = airportsdata.load("IATA")
-    from zoneinfo import ZoneInfo
+    return _AIRPORT_TZ_CACHE.get(code)
 
-    airport = _AIRPORT_TZ_CACHE.get(code)
+
+def _station_tz(code):
+    """Return the zoneinfo.ZoneInfo for an IATA station code, or None if
+    unknown (airportsdata doesn't have it, or code is missing/malformed)."""
+    airport = _airport(code)
     if not airport or not airport.get("tz"):
         return None
+    from zoneinfo import ZoneInfo
+
     return ZoneInfo(airport["tz"])
+
+
+def _station_country(code):
+    airport = _airport(code)
+    return airport.get("country") if airport else None
+
+
+def _is_intercontinental_station(code):
+    return _station_country(code) in INTERCONTINENTAL_COUNTRIES
 
 
 def _to_utc(local_date, hhmm, station_code):
@@ -308,6 +339,15 @@ def resolve_utc_times(all_results, year, home_base=HOME_BASE):
     """Walk the roster chronologically, tracking which station the pilot
     is physically at, and add '...Utc' fields (ISO 8601, UTC) alongside
     every existing LT field, without removing or changing the LT ones.
+
+    Also records, per day (30/09, later the same day): `reportStation` —
+    where the pilot physically is at the start of the day's duty/standby
+    — and `finishStation` — where they end up by the end of it. These
+    feed the app's scenario auto-detection (base vs outstation): a day
+    that starts AND ends at `home_base` is "at base"; one that ends
+    somewhere else is "at an outstation" (matching how 3.14.1(a)/(b) of
+    the A320/321 Working Conditions, and the equivalent A330 clause 3.13,
+    define those terms).
 
     Simplifications, flagged here rather than hidden in the code:
     - After a day off ('F'/'GL'), the pilot is assumed to be back at
@@ -344,6 +384,7 @@ def resolve_utc_times(all_results, year, home_base=HOME_BASE):
         day, month = (int(p) for p in key.split("/"))
         local_date = date(year, month, day)
         station_at_start = current_station
+        entry["reportStation"] = station_at_start
 
         report_time = entry.get("reportTime")
         if report_time:
@@ -351,6 +392,7 @@ def resolve_utc_times(all_results, year, home_base=HOME_BASE):
             if report_utc:
                 entry["reportTimeUtc"] = report_utc.isoformat()
 
+        intercontinental = False
         for leg in entry.get("legs", []):
             if leg.get("continuedFromPreviousDay"):
                 on_utc = _to_utc(local_date, leg.get("onBlock"), leg.get("destination"))
@@ -378,8 +420,29 @@ def resolve_utc_times(all_results, year, home_base=HOME_BASE):
                 if on_utc:
                     leg["onBlockUtc"] = on_utc.isoformat()
 
+            # Intercontinental / direction / time-difference hint for this
+            # leg — only meaningful once we have both ends' UTC times.
+            if _is_intercontinental_station(origin) or _is_intercontinental_station(destination):
+                intercontinental = True
+                off_tz = _station_tz(origin)
+                on_tz = _station_tz(destination)
+                on_utc_val = leg.get("onBlockUtc")
+                if off_tz and off_utc and on_tz and on_utc_val:
+                    on_dt = datetime.fromisoformat(on_utc_val)
+                    off_local_offset = off_utc.astimezone(off_tz).utcoffset()
+                    on_local_offset = on_dt.astimezone(on_tz).utcoffset()
+                    if off_local_offset is not None and on_local_offset is not None:
+                        diff_hours = abs((off_local_offset - on_local_offset).total_seconds()) / 3600
+                        entry["intercontinentalTimeDifferenceHours"] = round(diff_hours)
+                if _is_intercontinental_station(destination) and not _is_intercontinental_station(origin):
+                    entry["transatlanticDirection"] = "westbound"
+                elif _is_intercontinental_station(origin) and not _is_intercontinental_station(destination):
+                    entry["transatlanticDirection"] = "eastbound"
+
             if destination:
                 current_station = destination
+
+        entry["intercontinental"] = intercontinental
 
         for standby in entry.get("standbys", []):
             start_utc = _to_utc(local_date, standby.get("start"), station_at_start)
@@ -396,6 +459,8 @@ def resolve_utc_times(all_results, year, home_base=HOME_BASE):
             trailing_utc = _to_utc(local_date, trailing_time, current_station)
             if trailing_utc:
                 entry["trailingTimeUtc"] = trailing_utc.isoformat()
+
+        entry["finishStation"] = current_station
 
     return all_results
 
