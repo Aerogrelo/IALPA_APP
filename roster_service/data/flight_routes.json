@@ -1,34 +1,1359 @@
 {
-  "_comment": "Aer Lingus flight number -> route (origin/destination IATA) lookup table, used by the IALPA mass-audit tool to classify Master Roster days (Continental/Intercontinental, base/outstation) when only a flight number and time are printed, with no station code. Seeded 30/09 from Guillermo's own individual roster PDFs (whose parser already resolves origin/destination per leg) -- ground truth, not scraped/guessed. Grows over time as more roster PDFs (Guillermo's, or others Elena obtains) are parsed. Any flight number NOT in this table should be treated as unverified by the batch audit, never guessed.",
-  "83": {"origin": "DUB", "destination": "IND"},
-  "109": {"origin": "DUB", "destination": "JFK"},
-  "115": {"origin": "DUB", "destination": "PHL"},
-  "176": {"origin": "DUB", "destination": "LHR"},
-  "177": {"origin": "LHR", "destination": "DUB"},
-  "182": {"origin": "DUB", "destination": "LHR"},
-  "183": {"origin": "LHR", "destination": "DUB"},
-  "405": {"origin": "FCO", "destination": "DUB"},
-  "406": {"origin": "DUB", "destination": "FCO"},
-  "462": {"origin": "DUB", "destination": "TPS"},
-  "470": {"origin": "DUB", "destination": "SPU"},
-  "564": {"origin": "DUB", "destination": "BCN"},
-  "565": {"origin": "BCN", "destination": "DUB"},
-  "574": {"origin": "DUB", "destination": "ALC"},
-  "575": {"origin": "ALC", "destination": "DUB"},
-  "594": {"origin": "DUB", "destination": "MAD"},
-  "604": {"origin": "DUB", "destination": "AMS"},
-  "605": {"origin": "AMS", "destination": "DUB"},
-  "736": {"origin": "DUB", "destination": "PMI"},
-  "737": {"origin": "PMI", "destination": "DUB"},
-  "738": {"origin": "DUB", "destination": "PMI"},
-  "739": {"origin": "PMI", "destination": "DUB"},
-  "742": {"origin": "DUB", "destination": "SCQ"},
-  "743": {"origin": "SCQ", "destination": "DUB"},
-  "748": {"origin": "DUB", "destination": "BIO"},
-  "749": {"origin": "BIO", "destination": "DUB"},
-  "776": {"origin": "DUB", "destination": "ACE"},
-  "777": {"origin": "ACE", "destination": "DUB"},
-  "778": {"origin": "DUB", "destination": "ACE"},
-  "779": {"origin": "ACE", "destination": "DUB"},
-  "1463": {"origin": "TPS", "destination": "DUB"}
+  "_comment": "Aer Lingus flight number -> route (origin/destination IATA) lookup table, used by the IALPA mass-audit tool to classify Master Roster days (Continental/Intercontinental, base/outstation) when only a flight number and time are printed, with no station code. Seeded 30/09 from Guillermo's own individual roster PDFs (whose parser already resolves origin/destination per leg) -- ground truth, not scraped/guessed. Grows over time as more roster PDFs (Guillermo's, or others Elena obtains) are parsed. Any flight number NOT in this table should be treated as unverified by the batch audit, never guessed. NOTE (30/09 later update): flight 462 excluded pending Elena/Guillermo confirmation -- individual-roster ground truth said DUB-TPS, but the 30 Sep 2026 system-wide Flight Info listing showed 462 as DUB-CTA on that date. Likely the number is reused for a different destination on different days/seasons -- needs a human check before it goes back in.",
+  "83": {
+    "origin": "DUB",
+    "destination": "IND"
+  },
+  "109": {
+    "origin": "DUB",
+    "destination": "JFK"
+  },
+  "115": {
+    "origin": "DUB",
+    "destination": "PHL"
+  },
+  "176": {
+    "origin": "DUB",
+    "destination": "LHR"
+  },
+  "177": {
+    "origin": "LHR",
+    "destination": "DUB"
+  },
+  "182": {
+    "origin": "DUB",
+    "destination": "LHR"
+  },
+  "183": {
+    "origin": "LHR",
+    "destination": "DUB"
+  },
+  "405": {
+    "origin": "FCO",
+    "destination": "DUB"
+  },
+  "406": {
+    "origin": "DUB",
+    "destination": "FCO"
+  },
+  "470": {
+    "origin": "DUB",
+    "destination": "SPU"
+  },
+  "564": {
+    "origin": "DUB",
+    "destination": "BCN"
+  },
+  "565": {
+    "origin": "BCN",
+    "destination": "DUB"
+  },
+  "574": {
+    "origin": "DUB",
+    "destination": "ALC"
+  },
+  "575": {
+    "origin": "ALC",
+    "destination": "DUB"
+  },
+  "594": {
+    "origin": "DUB",
+    "destination": "MAD"
+  },
+  "604": {
+    "origin": "DUB",
+    "destination": "AMS"
+  },
+  "605": {
+    "origin": "AMS",
+    "destination": "DUB"
+  },
+  "736": {
+    "origin": "DUB",
+    "destination": "PMI"
+  },
+  "737": {
+    "origin": "PMI",
+    "destination": "DUB"
+  },
+  "738": {
+    "origin": "DUB",
+    "destination": "PMI"
+  },
+  "739": {
+    "origin": "PMI",
+    "destination": "DUB"
+  },
+  "742": {
+    "origin": "DUB",
+    "destination": "SCQ"
+  },
+  "743": {
+    "origin": "SCQ",
+    "destination": "DUB"
+  },
+  "748": {
+    "origin": "DUB",
+    "destination": "BIO"
+  },
+  "749": {
+    "origin": "BIO",
+    "destination": "DUB"
+  },
+  "776": {
+    "origin": "DUB",
+    "destination": "ACE"
+  },
+  "777": {
+    "origin": "ACE",
+    "destination": "DUB"
+  },
+  "778": {
+    "origin": "DUB",
+    "destination": "ACE"
+  },
+  "779": {
+    "origin": "ACE",
+    "destination": "DUB"
+  },
+  "1463": {
+    "origin": "TPS",
+    "destination": "DUB"
+  },
+  "992": {
+    "origin": "DUB",
+    "destination": "SNN"
+  },
+  "892": {
+    "origin": "ORK",
+    "destination": "FAO"
+  },
+  "428": {
+    "origin": "DUB",
+    "destination": "PSA"
+  },
+  "450": {
+    "origin": "DUB",
+    "destination": "NAP"
+  },
+  "550": {
+    "origin": "DUB",
+    "destination": "LYS"
+  },
+  "602": {
+    "origin": "DUB",
+    "destination": "AMS"
+  },
+  "402": {
+    "origin": "DUB",
+    "destination": "FCO"
+  },
+  "592": {
+    "origin": "DUB",
+    "destination": "MAD"
+  },
+  "3300": {
+    "origin": "DUB",
+    "destination": "SOU"
+  },
+  "152": {
+    "origin": "DUB",
+    "destination": "LHR"
+  },
+  "202": {
+    "origin": "DUB",
+    "destination": "MAN"
+  },
+  "262": {
+    "origin": "DUB",
+    "destination": "BHX"
+  },
+  "3600": {
+    "origin": "BHD",
+    "destination": "SOU"
+  },
+  "332": {
+    "origin": "DUB",
+    "destination": "BER"
+  },
+  "562": {
+    "origin": "DUB",
+    "destination": "BCN"
+  },
+  "3250": {
+    "origin": "DUB",
+    "destination": "EDI"
+  },
+  "3280": {
+    "origin": "DUB",
+    "destination": "BRS"
+  },
+  "520": {
+    "origin": "DUB",
+    "destination": "CDG"
+  },
+  "3640": {
+    "origin": "BHD",
+    "destination": "BHX"
+  },
+  "3670": {
+    "origin": "BHD",
+    "destination": "LBA"
+  },
+  "630": {
+    "origin": "DUB",
+    "destination": "BRU"
+  },
+  "692": {
+    "origin": "DUB",
+    "destination": "DUS"
+  },
+  "3220": {
+    "origin": "DUB",
+    "destination": "GLA"
+  },
+  "3390": {
+    "origin": "DUB",
+    "destination": "LBA"
+  },
+  "3680": {
+    "origin": "BHD",
+    "destination": "EMA"
+  },
+  "3610": {
+    "origin": "BHD",
+    "destination": "MAN"
+  },
+  "3650": {
+    "origin": "BHD",
+    "destination": "EDI"
+  },
+  "432": {
+    "origin": "DUB",
+    "destination": "LIN"
+  },
+  "502": {
+    "origin": "DUB",
+    "destination": "BOD"
+  },
+  "650": {
+    "origin": "DUB",
+    "destination": "FRA"
+  },
+  "3552": {
+    "origin": "DUB",
+    "destination": "EDI"
+  },
+  "342": {
+    "origin": "DUB",
+    "destination": "ZRH"
+  },
+  "660": {
+    "origin": "DUB",
+    "destination": "VIE"
+  },
+  "710": {
+    "origin": "ORK",
+    "destination": "LHR"
+  },
+  "352": {
+    "origin": "DUB",
+    "destination": "MUC"
+  },
+  "580": {
+    "origin": "DUB",
+    "destination": "AGP"
+  },
+  "762": {
+    "origin": "DUB",
+    "destination": "TFS"
+  },
+  "642": {
+    "origin": "DUB",
+    "destination": "PRG"
+  },
+  "154": {
+    "origin": "DUB",
+    "destination": "LHR"
+  },
+  "492": {
+    "origin": "DUB",
+    "destination": "FAO"
+  },
+  "3320": {
+    "origin": "DUB",
+    "destination": "MAN"
+  },
+  "3350": {
+    "origin": "DUB",
+    "destination": "NCL"
+  },
+  "401": {
+    "origin": "FCO",
+    "destination": "DUB"
+  },
+  "380": {
+    "origin": "SNN",
+    "destination": "LHR"
+  },
+  "476": {
+    "origin": "DUB",
+    "destination": "DBV"
+  },
+  "422": {
+    "origin": "DUB",
+    "destination": "VCE"
+  },
+  "522": {
+    "origin": "DUB",
+    "destination": "CDG"
+  },
+  "151": {
+    "origin": "LHR",
+    "destination": "DUB"
+  },
+  "824": {
+    "origin": "ORK",
+    "destination": "NCE"
+  },
+  "3550": {
+    "origin": "DUB",
+    "destination": "EDI"
+  },
+  "3401": {
+    "origin": "CFN",
+    "destination": "DUB"
+  },
+  "263": {
+    "origin": "BHX",
+    "destination": "DUB"
+  },
+  "203": {
+    "origin": "MAN",
+    "destination": "DUB"
+  },
+  "3281": {
+    "origin": "BRS",
+    "destination": "DUB"
+  },
+  "3651": {
+    "origin": "EDI",
+    "destination": "BHD"
+  },
+  "3671": {
+    "origin": "LBA",
+    "destination": "BHD"
+  },
+  "3641": {
+    "origin": "BHX",
+    "destination": "BHD"
+  },
+  "3251": {
+    "origin": "EDI",
+    "destination": "DUB"
+  },
+  "3221": {
+    "origin": "GLA",
+    "destination": "DUB"
+  },
+  "156": {
+    "origin": "DUB",
+    "destination": "LHR"
+  },
+  "582": {
+    "origin": "DUB",
+    "destination": "AGP"
+  },
+  "3681": {
+    "origin": "EMA",
+    "destination": "BHD"
+  },
+  "3611": {
+    "origin": "MAN",
+    "destination": "BHD"
+  },
+  "3391": {
+    "origin": "LBA",
+    "destination": "DUB"
+  },
+  "153": {
+    "origin": "LHR",
+    "destination": "DUB"
+  },
+  "3601": {
+    "origin": "SOU",
+    "destination": "BHD"
+  },
+  "893": {
+    "origin": "FAO",
+    "destination": "ORK"
+  },
+  "3321": {
+    "origin": "MAN",
+    "destination": "DUB"
+  },
+  "3553": {
+    "origin": "EDI",
+    "destination": "DUB"
+  },
+  "711": {
+    "origin": "LHR",
+    "destination": "ORK"
+  },
+  "3301": {
+    "origin": "SOU",
+    "destination": "DUB"
+  },
+  "3554": {
+    "origin": "DUB",
+    "destination": "EDI"
+  },
+  "3351": {
+    "origin": "NCL",
+    "destination": "DUB"
+  },
+  "603": {
+    "origin": "AMS",
+    "destination": "DUB"
+  },
+  "158": {
+    "origin": "DUB",
+    "destination": "LHR"
+  },
+  "3551": {
+    "origin": "EDI",
+    "destination": "DUB"
+  },
+  "524": {
+    "origin": "DUB",
+    "destination": "CDG"
+  },
+  "3622": {
+    "origin": "BHD",
+    "destination": "GLA"
+  },
+  "155": {
+    "origin": "LHR",
+    "destination": "DUB"
+  },
+  "381": {
+    "origin": "LHR",
+    "destination": "SNN"
+  },
+  "204": {
+    "origin": "DUB",
+    "destination": "MAN"
+  },
+  "532": {
+    "origin": "DUB",
+    "destination": "TLS"
+  },
+  "392": {
+    "origin": "DUB",
+    "destination": "HAM"
+  },
+  "3642": {
+    "origin": "BHD",
+    "destination": "BHX"
+  },
+  "551": {
+    "origin": "LYS",
+    "destination": "DUB"
+  },
+  "3620": {
+    "origin": "BHD",
+    "destination": "CWL"
+  },
+  "3672": {
+    "origin": "BHD",
+    "destination": "LBA"
+  },
+  "631": {
+    "origin": "BRU",
+    "destination": "DUB"
+  },
+  "521": {
+    "origin": "CDG",
+    "destination": "DUB"
+  },
+  "3222": {
+    "origin": "DUB",
+    "destination": "GLA"
+  },
+  "3252": {
+    "origin": "DUB",
+    "destination": "EDI"
+  },
+  "3322": {
+    "origin": "DUB",
+    "destination": "MAN"
+  },
+  "3604": {
+    "origin": "BHD",
+    "destination": "SOU"
+  },
+  "693": {
+    "origin": "DUS",
+    "destination": "DUB"
+  },
+  "404": {
+    "origin": "DUB",
+    "destination": "FCO"
+  },
+  "3264": {
+    "origin": "DUB",
+    "destination": "BHX"
+  },
+  "429": {
+    "origin": "PSA",
+    "destination": "DUB"
+  },
+  "333": {
+    "origin": "BER",
+    "destination": "DUB"
+  },
+  "593": {
+    "origin": "MAD",
+    "destination": "DUB"
+  },
+  "503": {
+    "origin": "BOD",
+    "destination": "DUB"
+  },
+  "3212": {
+    "origin": "DUB",
+    "destination": "IOM"
+  },
+  "651": {
+    "origin": "FRA",
+    "destination": "DUB"
+  },
+  "563": {
+    "origin": "BCN",
+    "destination": "DUB"
+  },
+  "544": {
+    "origin": "DUB",
+    "destination": "NCE"
+  },
+  "3612": {
+    "origin": "BHD",
+    "destination": "MAN"
+  },
+  "3623": {
+    "origin": "GLA",
+    "destination": "BHD"
+  },
+  "915": {
+    "origin": "LHR",
+    "destination": "NOC"
+  },
+  "105": {
+    "origin": "DUB",
+    "destination": "JFK"
+  },
+  "162": {
+    "origin": "DUB",
+    "destination": "LHR"
+  },
+  "3555": {
+    "origin": "EDI",
+    "destination": "DUB"
+  },
+  "403": {
+    "origin": "FCO",
+    "destination": "DUB"
+  },
+  "523": {
+    "origin": "CDG",
+    "destination": "DUB"
+  },
+  "433": {
+    "origin": "LIN",
+    "destination": "DUB"
+  },
+  "343": {
+    "origin": "ZRH",
+    "destination": "DUB"
+  },
+  "353": {
+    "origin": "MUC",
+    "destination": "DUB"
+  },
+  "714": {
+    "origin": "ORK",
+    "destination": "LHR"
+  },
+  "3192": {
+    "origin": "DUB",
+    "destination": "LPL"
+  },
+  "3226": {
+    "origin": "DUB",
+    "destination": "GLA"
+  },
+  "123": {
+    "origin": "DUB",
+    "destination": "ORD"
+  },
+  "3254": {
+    "origin": "DUB",
+    "destination": "EDI"
+  },
+  "205": {
+    "origin": "MAN",
+    "destination": "DUB"
+  },
+  "451": {
+    "origin": "NAP",
+    "destination": "DUB"
+  },
+  "494": {
+    "origin": "DUB",
+    "destination": "FAO"
+  },
+  "493": {
+    "origin": "FAO",
+    "destination": "DUB"
+  },
+  "825": {
+    "origin": "NCE",
+    "destination": "ORK"
+  },
+  "661": {
+    "origin": "VIE",
+    "destination": "DUB"
+  },
+  "643": {
+    "origin": "PRG",
+    "destination": "DUB"
+  },
+  "3643": {
+    "origin": "BHX",
+    "destination": "BHD"
+  },
+  "3673": {
+    "origin": "LBA",
+    "destination": "BHD"
+  },
+  "3223": {
+    "origin": "GLA",
+    "destination": "DUB"
+  },
+  "159": {
+    "origin": "LHR",
+    "destination": "DUB"
+  },
+  "756": {
+    "origin": "DUB",
+    "destination": "SVQ"
+  },
+  "3323": {
+    "origin": "MAN",
+    "destination": "DUB"
+  },
+  "423": {
+    "origin": "VCE",
+    "destination": "DUB"
+  },
+  "3265": {
+    "origin": "BHX",
+    "destination": "DUB"
+  },
+  "3253": {
+    "origin": "EDI",
+    "destination": "DUB"
+  },
+  "3213": {
+    "origin": "IOM",
+    "destination": "DUB"
+  },
+  "160": {
+    "origin": "DUB",
+    "destination": "LHR"
+  },
+  "117": {
+    "origin": "DUB",
+    "destination": "IAD"
+  },
+  "3605": {
+    "origin": "SOU",
+    "destination": "BHD"
+  },
+  "581": {
+    "origin": "AGP",
+    "destination": "DUB"
+  },
+  "3652": {
+    "origin": "BHD",
+    "destination": "EDI"
+  },
+  "538": {
+    "origin": "DUB",
+    "destination": "NTE"
+  },
+  "3613": {
+    "origin": "MAN",
+    "destination": "BHD"
+  },
+  "133": {
+    "origin": "DUB",
+    "destination": "BOS"
+  },
+  "208": {
+    "origin": "DUB",
+    "destination": "MAN"
+  },
+  "763": {
+    "origin": "TFS",
+    "destination": "DUB"
+  },
+  "477": {
+    "origin": "DBV",
+    "destination": "DUB"
+  },
+  "61": {
+    "origin": "DUB",
+    "destination": "SFO"
+  },
+  "526": {
+    "origin": "DUB",
+    "destination": "CDG"
+  },
+  "584": {
+    "origin": "DUB",
+    "destination": "AGP"
+  },
+  "3284": {
+    "origin": "DUB",
+    "destination": "BRS"
+  },
+  "3193": {
+    "origin": "LPL",
+    "destination": "DUB"
+  },
+  "525": {
+    "origin": "CDG",
+    "destination": "DUB"
+  },
+  "101": {
+    "origin": "DUB",
+    "destination": "EWR"
+  },
+  "127": {
+    "origin": "DUB",
+    "destination": "YYZ"
+  },
+  "3227": {
+    "origin": "GLA",
+    "destination": "DUB"
+  },
+  "3255": {
+    "origin": "EDI",
+    "destination": "DUB"
+  },
+  "163": {
+    "origin": "LHR",
+    "destination": "DUB"
+  },
+  "583": {
+    "origin": "AGP",
+    "destination": "DUB"
+  },
+  "166": {
+    "origin": "DUB",
+    "destination": "LHR"
+  },
+  "3646": {
+    "origin": "BHD",
+    "destination": "BHX"
+  },
+  "608": {
+    "origin": "DUB",
+    "destination": "AMS"
+  },
+  "393": {
+    "origin": "HAM",
+    "destination": "DUB"
+  },
+  "3256": {
+    "origin": "DUB",
+    "destination": "EDI"
+  },
+  "715": {
+    "origin": "LHR",
+    "destination": "ORK"
+  },
+  "135": {
+    "origin": "SNN",
+    "destination": "BOS"
+  },
+  "121": {
+    "origin": "DUB",
+    "destination": "MCO"
+  },
+  "533": {
+    "origin": "TLS",
+    "destination": "DUB"
+  },
+  "77": {
+    "origin": "DUB",
+    "destination": "BNA"
+  },
+  "3224": {
+    "origin": "DUB",
+    "destination": "GLA"
+  },
+  "3330": {
+    "origin": "DUB",
+    "destination": "EXT"
+  },
+  "3653": {
+    "origin": "EDI",
+    "destination": "BHD"
+  },
+  "131": {
+    "origin": "DUB",
+    "destination": "BDL"
+  },
+  "446": {
+    "origin": "DUB",
+    "destination": "JTR"
+  },
+  "874": {
+    "origin": "ORK",
+    "destination": "TFS"
+  },
+  "448": {
+    "origin": "DUB",
+    "destination": "HER"
+  },
+  "165": {
+    "origin": "LHR",
+    "destination": "DUB"
+  },
+  "3614": {
+    "origin": "BHD",
+    "destination": "MAN"
+  },
+  "89": {
+    "origin": "DUB",
+    "destination": "MSP"
+  },
+  "209": {
+    "origin": "MAN",
+    "destination": "DUB"
+  },
+  "3403": {
+    "origin": "CFN",
+    "destination": "DUB"
+  },
+  "168": {
+    "origin": "DUB",
+    "destination": "LHR"
+  },
+  "111": {
+    "origin": "SNN",
+    "destination": "JFK"
+  },
+  "3286": {
+    "origin": "DUB",
+    "destination": "BRS"
+  },
+  "385": {
+    "origin": "LHR",
+    "destination": "SNN"
+  },
+  "3272": {
+    "origin": "DUB",
+    "destination": "BHX"
+  },
+  "3676": {
+    "origin": "BHD",
+    "destination": "LBA"
+  },
+  "3285": {
+    "origin": "BRS",
+    "destination": "DUB"
+  },
+  "764": {
+    "origin": "DUB",
+    "destination": "TFS"
+  },
+  "782": {
+    "origin": "DUB",
+    "destination": "LPA"
+  },
+  "3242": {
+    "origin": "DUB",
+    "destination": "ABZ"
+  },
+  "3647": {
+    "origin": "BHX",
+    "destination": "BHD"
+  },
+  "53": {
+    "origin": "DUB",
+    "destination": "SEA"
+  },
+  "69": {
+    "origin": "DUB",
+    "destination": "LAX"
+  },
+  "545": {
+    "origin": "NCE",
+    "destination": "DUB"
+  },
+  "495": {
+    "origin": "FAO",
+    "destination": "DUB"
+  },
+  "3656": {
+    "origin": "BHD",
+    "destination": "EDI"
+  },
+  "81": {
+    "origin": "DUB",
+    "destination": "PIT"
+  },
+  "3930": {
+    "origin": "DUB",
+    "destination": "NQY"
+  },
+  "122": {
+    "origin": "ORD",
+    "destination": "DUB"
+  },
+  "3326": {
+    "origin": "DUB",
+    "destination": "MAN"
+  },
+  "167": {
+    "origin": "LHR",
+    "destination": "DUB"
+  },
+  "172": {
+    "origin": "DUB",
+    "destination": "LHR"
+  },
+  "3225": {
+    "origin": "GLA",
+    "destination": "DUB"
+  },
+  "539": {
+    "origin": "NTE",
+    "destination": "DUB"
+  },
+  "87": {
+    "origin": "DUB",
+    "destination": "CLE"
+  },
+  "586": {
+    "origin": "DUB",
+    "destination": "AGP"
+  },
+  "3615": {
+    "origin": "MAN",
+    "destination": "BHD"
+  },
+  "722": {
+    "origin": "ORK",
+    "destination": "LHR"
+  },
+  "496": {
+    "origin": "DUB",
+    "destination": "FAO"
+  },
+  "119": {
+    "origin": "DUB",
+    "destination": "IAD"
+  },
+  "356": {
+    "origin": "DUB",
+    "destination": "MUC"
+  },
+  "3843": {
+    "origin": "BRS",
+    "destination": "ORK"
+  },
+  "527": {
+    "origin": "CDG",
+    "destination": "DUB"
+  },
+  "3677": {
+    "origin": "LBA",
+    "destination": "BHD"
+  },
+  "3273": {
+    "origin": "BHX",
+    "destination": "DUB"
+  },
+  "3645": {
+    "origin": "BHX",
+    "destination": "BHD"
+  },
+  "107": {
+    "origin": "DUB",
+    "destination": "JFK"
+  },
+  "125": {
+    "origin": "DUB",
+    "destination": "ORD"
+  },
+  "137": {
+    "origin": "DUB",
+    "destination": "BOS"
+  },
+  "757": {
+    "origin": "SVQ",
+    "destination": "DUB"
+  },
+  "656": {
+    "origin": "DUB",
+    "destination": "FRA"
+  },
+  "3274": {
+    "origin": "DUB",
+    "destination": "BHX"
+  },
+  "169": {
+    "origin": "LHR",
+    "destination": "DUB"
+  },
+  "386": {
+    "origin": "SNN",
+    "destination": "LHR"
+  },
+  "104": {
+    "origin": "JFK",
+    "destination": "DUB"
+  },
+  "609": {
+    "origin": "AMS",
+    "destination": "DUB"
+  },
+  "3636": {
+    "origin": "BHD",
+    "destination": "BHX"
+  },
+  "3657": {
+    "origin": "EDI",
+    "destination": "BHD"
+  },
+  "3243": {
+    "origin": "ABZ",
+    "destination": "DUB"
+  },
+  "116": {
+    "origin": "IAD",
+    "destination": "DUB"
+  },
+  "3217": {
+    "origin": "IOM",
+    "destination": "DUB"
+  },
+  "3606": {
+    "origin": "BHD",
+    "destination": "SOU"
+  },
+  "132": {
+    "origin": "BOS",
+    "destination": "DUB"
+  },
+  "3327": {
+    "origin": "MAN",
+    "destination": "DUB"
+  },
+  "3931": {
+    "origin": "NQY",
+    "destination": "DUB"
+  },
+  "698": {
+    "origin": "DUB",
+    "destination": "DUS"
+  },
+  "100": {
+    "origin": "EWR",
+    "destination": "DUB"
+  },
+  "886": {
+    "origin": "ORK",
+    "destination": "AGP"
+  },
+  "126": {
+    "origin": "YYZ",
+    "destination": "DUB"
+  },
+  "60": {
+    "origin": "SFO",
+    "destination": "DUB"
+  },
+  "336": {
+    "origin": "DUB",
+    "destination": "BER"
+  },
+  "3228": {
+    "origin": "DUB",
+    "destination": "GLA"
+  },
+  "3308": {
+    "origin": "DUB",
+    "destination": "SOU"
+  },
+  "3648": {
+    "origin": "BHD",
+    "destination": "BHX"
+  },
+  "585": {
+    "origin": "AGP",
+    "destination": "DUB"
+  },
+  "130": {
+    "origin": "BDL",
+    "destination": "DUB"
+  },
+  "638": {
+    "origin": "DUB",
+    "destination": "BRU"
+  },
+  "3678": {
+    "origin": "BHD",
+    "destination": "LBA"
+  },
+  "173": {
+    "origin": "LHR",
+    "destination": "DUB"
+  },
+  "3618": {
+    "origin": "BHD",
+    "destination": "MAN"
+  },
+  "610": {
+    "origin": "DUB",
+    "destination": "AMS"
+  },
+  "110": {
+    "origin": "JFK",
+    "destination": "SNN"
+  },
+  "723": {
+    "origin": "LHR",
+    "destination": "ORK"
+  },
+  "134": {
+    "origin": "BOS",
+    "destination": "SNN"
+  },
+  "528": {
+    "origin": "DUB",
+    "destination": "CDG"
+  },
+  "3258": {
+    "origin": "DUB",
+    "destination": "EDI"
+  },
+  "88": {
+    "origin": "MSP",
+    "destination": "DUB"
+  },
+  "3842": {
+    "origin": "ORK",
+    "destination": "BRS"
+  },
+  "76": {
+    "origin": "BNA",
+    "destination": "DUB"
+  },
+  "3275": {
+    "origin": "BHX",
+    "destination": "DUB"
+  },
+  "486": {
+    "origin": "DUB",
+    "destination": "LIS"
+  },
+  "3637": {
+    "origin": "BHX",
+    "destination": "BHD"
+  },
+  "3408": {
+    "origin": "DUB",
+    "destination": "CFN"
+  },
+  "3328": {
+    "origin": "DUB",
+    "destination": "MAN"
+  },
+  "387": {
+    "origin": "LHR",
+    "destination": "SNN"
+  },
+  "52": {
+    "origin": "SEA",
+    "destination": "DUB"
+  },
+  "875": {
+    "origin": "TFS",
+    "destination": "ORK"
+  },
+  "3394": {
+    "origin": "DUB",
+    "destination": "LBA"
+  },
+  "990": {
+    "origin": "DUB",
+    "destination": "SNN"
+  },
+  "3196": {
+    "origin": "DUB",
+    "destination": "LPL"
+  },
+  "3607": {
+    "origin": "SOU",
+    "destination": "BHD"
+  },
+  "3649": {
+    "origin": "BHX",
+    "destination": "BHD"
+  },
+  "82": {
+    "origin": "IND",
+    "destination": "DUB"
+  },
+  "3679": {
+    "origin": "LBA",
+    "destination": "BHD"
+  },
+  "463": {
+    "origin": "CTA",
+    "destination": "DUB"
+  },
+  "3619": {
+    "origin": "MAN",
+    "destination": "BHD"
+  },
+  "120": {
+    "origin": "MCO",
+    "destination": "DUB"
+  },
+  "3309": {
+    "origin": "SOU",
+    "destination": "DUB"
+  },
+  "497": {
+    "origin": "FAO",
+    "destination": "DUB"
+  },
+  "68": {
+    "origin": "LAX",
+    "destination": "DUB"
+  },
+  "80": {
+    "origin": "PIT",
+    "destination": "DUB"
+  },
+  "3289": {
+    "origin": "BRS",
+    "destination": "DUB"
+  },
+  "114": {
+    "origin": "PHL",
+    "destination": "DUB"
+  },
+  "3259": {
+    "origin": "EDI",
+    "destination": "DUB"
+  },
+  "357": {
+    "origin": "MUC",
+    "destination": "DUB"
+  },
+  "657": {
+    "origin": "FRA",
+    "destination": "DUB"
+  },
+  "783": {
+    "origin": "LPA",
+    "destination": "DUB"
+  },
+  "765": {
+    "origin": "TFS",
+    "destination": "DUB"
+  },
+  "86": {
+    "origin": "CLE",
+    "destination": "DUB"
+  },
+  "3329": {
+    "origin": "MAN",
+    "destination": "DUB"
+  },
+  "118": {
+    "origin": "IAD",
+    "destination": "DUB"
+  },
+  "587": {
+    "origin": "AGP",
+    "destination": "DUB"
+  },
+  "124": {
+    "origin": "ORD",
+    "destination": "DUB"
+  },
+  "699": {
+    "origin": "DUS",
+    "destination": "DUB"
+  },
+  "3197": {
+    "origin": "LPL",
+    "destination": "DUB"
+  },
+  "106": {
+    "origin": "JFK",
+    "destination": "DUB"
+  },
+  "3395": {
+    "origin": "LBA",
+    "destination": "DUB"
+  },
+  "388": {
+    "origin": "SNN",
+    "destination": "LHR"
+  },
+  "136": {
+    "origin": "BOS",
+    "destination": "DUB"
+  },
+  "639": {
+    "origin": "BRU",
+    "destination": "DUB"
+  },
+  "447": {
+    "origin": "JTR",
+    "destination": "DUB"
+  },
+  "611": {
+    "origin": "AMS",
+    "destination": "DUB"
+  },
+  "337": {
+    "origin": "BER",
+    "destination": "DUB"
+  },
+  "449": {
+    "origin": "HER",
+    "destination": "DUB"
+  },
+  "529": {
+    "origin": "CDG",
+    "destination": "DUB"
+  },
+  "887": {
+    "origin": "AGP",
+    "destination": "ORK"
+  },
+  "487": {
+    "origin": "LIS",
+    "destination": "DUB"
+  }
 }
