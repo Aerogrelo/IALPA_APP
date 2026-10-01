@@ -1,5 +1,5 @@
 {
-  "_comment": "Aer Lingus flight number -> route (origin/destination IATA) lookup table, used by the IALPA mass-audit tool to classify Master Roster days (Continental/Intercontinental, base/outstation) when only a flight number and time are printed, with no station code. Seeded 30/09 from Guillermo's own individual roster PDFs (whose parser already resolves origin/destination per leg) -- ground truth, not scraped/guessed. Grows over time as more roster PDFs (Guillermo's, or others Elena obtains) are parsed. Any flight number NOT in this table should be treated as unverified by the batch audit, never guessed. NOTE (30/09 later update): flight 462 excluded pending Elena/Guillermo confirmation -- individual-roster ground truth said DUB-TPS, but the 30 Sep 2026 system-wide Flight Info listing showed 462 as DUB-CTA on that date. Likely the number is reused for a different destination on different days/seasons -- needs a human check before it goes back in.",
+  "_comment": "Aer Lingus flight number -> route (origin/destination IATA) lookup table, used by the IALPA mass-audit tool to classify Master Roster days (Continental/Intercontinental, base/outstation) when only a flight number and time are printed, with no station code. Seeded 30/09 from Guillermo's own individual roster PDFs (whose parser already resolves origin/destination per leg) -- ground truth, not scraped/guessed. Grows over time as more roster PDFs (Guillermo's, or others Elena obtains) are parsed. Any flight number NOT in this table should be treated as unverified by the batch audit, never guessed. NOTE (01/10 update): flight 462 confirmed by Elena as DUB-CTA; the individual-roster seed value (DUB-TPS) was wrong/stale and has been corrected.",
   "83": {
     "origin": "DUB",
     "destination": "IND"
@@ -1355,5 +1355,9 @@
   "487": {
     "origin": "LIS",
     "destination": "DUB"
+  },
+  "462": {
+    "origin": "DUB",
+    "destination": "CTA"
   }
 }
