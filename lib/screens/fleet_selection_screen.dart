@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'check_type_screen.dart';
+import 'master_roster_audit_screen.dart';
 
 enum Fleet { a320, a330 }
 
@@ -47,6 +48,21 @@ class FleetSelectionScreen extends StatelessWidget {
               _FleetButton(
                 label: 'A330',
                 onPressed: () => _openCheckType(context, Fleet.a330),
+              ),
+              const SizedBox(height: 32),
+              // Internal IALPA tool (01/10) — deliberately understated,
+              // not part of the pilot-facing flow above: checks a whole
+              // published Master Roster at once, not one pilot's own.
+              TextButton(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const MasterRosterAuditScreen(),
+                  ),
+                ),
+                child: const Text(
+                  'IALPA tool: Master Roster audit',
+                  style: TextStyle(fontSize: 12),
+                ),
               ),
             ],
           ),

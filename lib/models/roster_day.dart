@@ -95,6 +95,34 @@ class RosterDay {
   /// the pilot for by hand.
   final int? intercontinentalTimeDifferenceHours;
 
+  /// Returns a copy with just the given fields overridden — added 01/10
+  /// for the Master Roster review screen, which lets a reviewer fill in
+  /// a day's missing finish time (and, separately, bump its status from
+  /// 'needs_review' to 'ok' once that's done) without having to rebuild
+  /// the whole [RosterDay] by hand from its many fields.
+  RosterDay copyWith({
+    String? status,
+    DateTime? trailingTimeUtc,
+    String? trailingTime,
+  }) {
+    return RosterDay(
+      status: status ?? this.status,
+      kind: kind,
+      reportTime: reportTime,
+      trailingTime: trailingTime ?? this.trailingTime,
+      reportTimeUtc: reportTimeUtc,
+      trailingTimeUtc: trailingTimeUtc ?? this.trailingTimeUtc,
+      legs: legs,
+      standbys: standbys,
+      flags: flags,
+      reportStation: reportStation,
+      finishStation: finishStation,
+      intercontinental: intercontinental,
+      transatlanticDirection: transatlanticDirection,
+      intercontinentalTimeDifferenceHours: intercontinentalTimeDifferenceHours,
+    );
+  }
+
   static DateTime? _parseUtc(dynamic value) {
     if (value is! String) return null;
     return DateTime.tryParse(value)?.toUtc();
