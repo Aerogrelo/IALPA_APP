@@ -58,10 +58,16 @@ Future<Map<String, dynamic>> uploadRosterPdf(
 
   final http.StreamedResponse streamed;
   try {
-    // Render's free tier spins down after inactivity — the first request
-    // in a while can take several seconds just to wake it back up. 60s
-    // comfortably covers that; anything else surfaces as a real error.
-    streamed = await request.send().timeout(const Duration(seconds: 60));
+    // 02/10: 60s wasn't actually enough -- confirmed live against
+    // Render's own logs that a cold start (free tier spins down after
+    // inactivity) plus parsing a real roster PDF can take a bit over a
+    // minute end to end, and the client was giving up right as the
+    // server was about to answer (its POST showed "200 OK" in Render's
+    // logs, just after this timeout had already fired client-side).
+    // 150s gives real headroom above that without leaving the pilot
+    // staring at a frozen button forever if the service is genuinely
+    // unreachable.
+    streamed = await request.send().timeout(const Duration(seconds: 150));
   } catch (e) {
     throw RosterServiceException(
       'Could not reach the roster service. Check your connection and try '
