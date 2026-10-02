@@ -62,6 +62,26 @@ import '../rules/a330/rest/pre_intercontinental.dart';
 import '../rules/a330/rest/through_the_night.dart';
 import 'scenario_detection.dart';
 
+/// 01/10 (Full Roster Audit): the individual-roster parser's
+/// `stitch_overnight_duties` (`roster_service/roster_parser.py`) fills
+/// BOTH printed rows of a duty that spans a midnight row-break — day N
+/// gets a copied finish time (from day N+1's arrival leg), and day N+1
+/// gets a copied REPORT time (day N's original report) — so a pilot
+/// picking either day in the manual single-day picker sees the same
+/// complete duty either way. That's the right design there, but this
+/// batch screen audits every day independently: without recognising this
+/// flag, day N+1 reads as a brand-new duty running from the (copied,
+/// hours-earlier) report to day N+1's own finish — producing impossible
+/// durations and negative "rest" before it. Found live (01/10) from the
+/// actual durations Elena saw on screen (24h, 53h, a -11h52 "rest").
+/// A day carrying this flag is the tail end of the duty already counted
+/// (and verified) on the day before it, not a new one — the Master
+/// Roster's own classifier never produces this flag (it drops the
+/// leading bare time instead of copying a report forward, see
+/// `classify_master_roster_days.py`), so this only ever matters for the
+/// individual-roster "Full Roster Audit" screen.
+const _reportCopiedFromPreviousDay = 'report_time_from_previous_day';
+
 enum AuditFleet { a320, a330 }
 
 enum FindingKind { maxDuty, minRest }
@@ -164,6 +184,17 @@ List<Finding> auditPilotMaxDuty(
 }) {
   final findings = <Finding>[];
   pilot.days.forEach((date, day) {
+    if (day.flags.contains(_reportCopiedFromPreviousDay)) {
+      // The whole duty was already counted (and verified) on the day
+      // before — see the flag's doc comment above.
+      findings.add(Finding(
+        pilotName: pilot.name, pilotId: pilot.id, date: date,
+        kind: FindingKind.maxDuty,
+        notApplicable: 'this is the tail end of a duty already checked '
+            'on the day before',
+      ));
+      return;
+    }
     if (day.status != 'ok' || day.kind != null) {
       if (day.status == 'needs_review') {
         findings.add(Finding(
@@ -270,6 +301,21 @@ List<Finding> auditPilotMinRest(PilotRecord pilot, AuditFleet fleet) {
 
   for (final date in pilot.days.keys) {
     final day = pilot.days[date]!;
+
+    if (day.flags.contains(_reportCopiedFromPreviousDay)) {
+      // Not a new duty starting after a rest — it's the tail end of the
+      // one already checked on the day before (see the flag's doc
+      // comment above), so there's no "rest ending here" to verify. Its
+      // OWN finish time (if this day has further activity after landing)
+      // is still real, though, and still marks where that whole duty
+      // actually ends for whatever rest check comes after it.
+      if (day.trailingTimeUtc != null) {
+        previousDuty = day;
+        previousDate = date;
+        unresolvedDutyDate = null;
+      }
+      continue;
+    }
 
     if (day.status == 'needs_review') {
       findings.add(Finding(

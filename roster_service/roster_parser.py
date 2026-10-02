@@ -541,6 +541,18 @@ def parse_roster_pdf(file_path, year=None):
         for page in pdf.pages:
             page_results = parse_page(page)
             all_results.update(page_results)
+            # 02/10: pdfplumber caches each page's full layout/char tree
+            # (via pdfminer) on the Page object, and `pdf.pages` keeps
+            # every Page object alive for as long as `pdf` is open — so
+            # without this, memory grows with every page processed and
+            # is never released until the whole PDF is done. Render's
+            # free tier (512MB) OOM-killed the service mid-request on a
+            # real roster upload (confirmed in Render's Events log:
+            # "Ran out of memory (used over 512MB)"); flushing each
+            # page's cache as soon as we're done with it keeps peak
+            # memory roughly constant instead of growing with page
+            # count.
+            page.flush_cache()
 
     resolve_utc_times(all_results, year)
     stitch_overnight_duties(all_results, year)

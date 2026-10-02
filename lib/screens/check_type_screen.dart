@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'change_of_duty_input_screen.dart';
 import 'fleet_selection_screen.dart';
+import 'full_roster_audit_screen.dart';
 import 'max_duty_input_screen.dart';
 import 'min_rest_input_screen.dart';
 
@@ -10,7 +11,9 @@ import 'min_rest_input_screen.dart';
 /// Added 29/09 when Change of Duty (Group A) became the second available
 /// check, alongside the existing Maximum Duty (Group D) — this screen is
 /// what makes room for that choice without cluttering fleet selection.
-/// Minimum Rest (Group B) added 30/09.
+/// Minimum Rest (Group B) added 30/09. Full Roster Audit added 01/10 —
+/// see `full_roster_audit_screen.dart` for what it is and why it reuses
+/// the IALPA Master Roster review screen almost unchanged.
 class CheckTypeScreen extends StatelessWidget {
   const CheckTypeScreen({super.key, required this.fleet});
 
@@ -60,6 +63,17 @@ class CheckTypeScreen extends StatelessWidget {
                 onPressed: () => Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (_) => MinRestInputScreen(fleet: fleet),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              _CheckTypeButton(
+                label: 'Full Roster Audit',
+                subtitle: 'Checks every day on your whole published '
+                    'roster at once, not just a single change.',
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => FullRosterAuditScreen(fleet: fleet),
                   ),
                 ),
               ),
