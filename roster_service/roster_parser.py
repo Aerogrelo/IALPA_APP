@@ -94,6 +94,14 @@ def close(c1, c2, tol=0.02):
 
 DATE_HEADER_RE = re.compile(r"^\d{1,2}/\d{1,2}$")
 
+# Full-width colored bar used by the report to introduce a new section
+# below the day grid (e.g. "Total Hours and Statistics", "Other Crew").
+# Its vertical position varies from roster to roster (it depends on how
+# many lines of text the day grid needs), so it can land anywhere — we use
+# it to find the grid's real bottom edge instead of a fixed pixel cutoff.
+SECTION_BAR_COLOR = (0.20392, 0.59608, 0.85882)
+GRID_BOTTOM_FALLBACK = 400
+
 
 def parse_page(page):
     words = page.extract_words(extra_attrs=["non_stroking_color"])
@@ -117,7 +125,23 @@ def parse_page(page):
                 best_d, best_i = d, i
         return best_i
 
-    grid_words = [w for w in words if 106 < w["top"] < 400]
+    # The day grid ends where the next full-width section bar begins (the
+    # "Total Hours and Statistics" / "Other Crew" summary that follows it
+    # on the same page). That bar's position shifts month to month, so a
+    # fixed cutoff can either truncate real duty rows or — as happened
+    # with a short October grid — swallow the summary sections themselves
+    # into the day columns. Fall back to the old fixed cutoff if no such
+    # bar is found (e.g. a differently-shaped page).
+    section_bars = [
+        r
+        for r in page.rects
+        if r.get("non_stroking_color") == SECTION_BAR_COLOR
+        and (r["x1"] - r["x0"]) > page.width * 0.5
+        and r["top"] > 110
+    ]
+    grid_bottom = min((r["top"] for r in section_bars), default=GRID_BOTTOM_FALLBACK)
+
+    grid_words = [w for w in words if 106 < w["top"] < grid_bottom]
     days = defaultdict(list)
     for w in grid_words:
         days[col_index(w["x0"])].append(w)
@@ -283,7 +307,23 @@ def parse_day(tokens):
                 continue
 
         if continuation and not has_content() and STATION_RE.match(text):
-            if i + 2 < n and ACTUAL_TIME_RE.match(tokens[i + 1][0]) and AIRCRAFT_RE.match(tokens[i + 2][0]):
+            # The arrival time of this carried-over leg is usually printed
+            # plain ("00:20"), not "actual"-marked ("A00:20") — unlike the
+            # main leg branch below, this used to require the "A" form
+            # and fell through to unclassified_token whenever the roster
+            # printed a plain time here (confirmed on the October roster,
+            # e.g. 18/10, 19/10, 21/10, 29/10 — all legitimate overnight
+            # continuations that didn't crash but were silently losing
+            # this leg and corrupting the report/trailing times of the
+            # real same-day second duty that followed it).
+            on_val, on_actual = None, None
+            if i + 1 < n:
+                m = ACTUAL_TIME_RE.match(tokens[i + 1][0])
+                if m:
+                    on_val, on_actual = m.group(1), True
+                elif TIME_RE.match(tokens[i + 1][0]):
+                    on_val, on_actual = tokens[i + 1][0], False
+            if i + 2 < n and on_val is not None and AIRCRAFT_RE.match(tokens[i + 2][0]):
                 events.append(
                     (
                         "leg",
@@ -292,7 +332,8 @@ def parse_day(tokens):
                             "offBlock": None,
                             "origin": None,
                             "destination": text,
-                            "onBlock": ACTUAL_TIME_RE.match(tokens[i + 1][0]).group(1),
+                            "onBlock": on_val,
+                            "onBlockActual": on_actual,
                             "aircraft": tokens[i + 2][0].strip("[]"),
                             "continuedFromPreviousDay": True,
                         },
