@@ -28,8 +28,14 @@ class CheckTypeScreen extends StatelessWidget {
       // $fleetLabel' truncated on an iPhone-width screen, found by testing
       // in a 375px-wide viewport.
       appBar: AppBar(title: Text('$fleetLabel — check type')),
+      // Wrapped in a scroll view (03/10): with four buttons (since Full
+      // Roster Audit was added 01/10) the column no longer fits a short
+      // screen — it was overflowing by 151px in the widget test's default
+      // viewport, and would do the same on a small real phone in landscape
+      // or with a larger system font. Scrolling keeps every button
+      // reachable instead of clipping the last one.
       body: Center(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
