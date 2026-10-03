@@ -74,6 +74,14 @@ DAY_OFF_CODES = {"F", "GL"}
 STANDBY_CODES = {"STBH", "STBQ"}
 BRIEFING_CODES = {"BR"}  # briefing after a long gap not flying to a station; counts as duty
 DUTY_BLOCK_CODES = STANDBY_CODES | BRIEFING_CODES
+# Ground duties printed as a bare code label before the day's report/
+# trailing times (e.g. "OLL 09:00 17:00" for Online Training) rather than
+# a flight or a standby block. Confirmed with Elena (03/10): these count
+# as normal duty for minimum-rest purposes, so the code itself is simply
+# consumed here (like the "M" marker below) and the two bare times that
+# follow are left to be picked up as this day's ordinary report/trailing
+# time, exactly as ordinary flying duty is.
+GROUND_DUTY_CODES = {"OLL"}
 
 HOME_BASE = "DUB"
 
@@ -215,6 +223,10 @@ def parse_day(tokens):
             continue
 
         if text == "M":
+            i += 1
+            continue
+
+        if text in GROUND_DUTY_CODES:
             i += 1
             continue
 
