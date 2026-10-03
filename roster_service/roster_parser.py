@@ -42,6 +42,21 @@ Elena's request, to cut down on manual selection now that the roster
 already carries this information. These are hints, not verdicts: the app
 still shows what was detected and lets the pilot correct it before
 verifying, same "never silently guess" principle as everything else here.
+
+03/10: a fourth pass, `promote_second_duties`, handles a real print shape
+found in Guillermo's own August roster that none of the above anticipated
+— a day whose cell packs TWO entirely separate duties: the tail end of an
+overnight duty finishing in the early hours, immediately followed by a
+brand-new same-day duty's own report/legs/finish. `parse_day` now detects
+and splits this (see `_split_duties`) instead of silently merging the two
+into one (which used to lose the first duty's true finish time and made
+the app ask for a "finish time" that was in fact printed on the PDF all
+along). `resolve_utc_times` runs its station-tracking/UTC-conversion
+logic a second time for the split-off second duty (via `_process_duty`),
+and `promote_second_duties` lifts it into its own top-level day entry
+("07/08 (2)") once both earlier passes are done, so the rest of the
+pipeline — and the Dart app, which just trusts whatever order the `days`
+map comes in — see two ordinary, complete days instead of one merged one.
 """
 
 import re
@@ -129,6 +144,11 @@ def parse_day(tokens):
     if texts[0] in DAY_OFF_CODES:
         return {"status": "ok", "kind": texts[0]}
 
+    # flags carries (token_index, text) pairs rather than plain strings —
+    # needed (03/10) to tell which half a flag belongs to once a day
+    # turns out to hold two duties (see below): a flag recorded AFTER the
+    # split point (e.g. "continues_next_day" from a token near the end of
+    # the cell) describes the SECOND duty, not the first.
     flags = []
     i = 0
     n = len(tokens)
@@ -136,19 +156,37 @@ def parse_day(tokens):
     if texts[0] == "↓":
         continuation = True
         i = 1
-        flags.append("continuation_from_previous_day")
+        flags.append((0, "continuation_from_previous_day"))
 
-    legs = []
-    standbys = []
+    # 03/10: tokens are collected into an ordered list of events (a leg, a
+    # standby, or a bare time, each tagged with its token index) instead
+    # of writing straight into report_time/trailing_time/legs/standbys as
+    # they're seen. The token shapes below (flight legs, standbys, the
+    # Delay annotation, the overnight-continuation leg) are unchanged
+    # from before -- this is only a different way of GROUPING the same
+    # events afterwards, so a day with exactly one duty (the overwhelming
+    # majority) ends up with the identical result as before. It's what
+    # lets _split_duties() (below) recognise the one real exception: a
+    # roster cell that packs TWO separate duties into the same calendar
+    # day (confirmed 03/10 against Guillermo's real August roster, days
+    # 06-07/08 and 22-23/08 both: the tail end of an overnight duty
+    # finishing early morning, immediately followed by a brand-new
+    # same-day duty's own report, legs and finish -- e.g. "...arrival
+    # leg, 02:35, 15:20, <new legs>, 22:59"). Before this, the second bare
+    # time silently overwrote the first, so the true overnight-duty
+    # finish time was lost and the day looked like it needed a
+    # manually-entered finish time it had never actually been missing.
+    events = []
     delays = []
-    report_time = None
-    trailing_time = None
+
+    def has_content():
+        return any(kind in ("leg", "standby") for kind, _, _ in events)
 
     while i < n:
         text, color = tokens[i]
 
         if text == "→":
-            flags.append("continues_next_day")
+            flags.append((i, "continues_next_day"))
             i += 1
             continue
 
@@ -158,11 +196,13 @@ def parse_day(tokens):
 
         if text in DUTY_BLOCK_CODES:
             if i + 2 < n and TIME_RE.match(tokens[i + 1][0]) and TIME_RE.match(tokens[i + 2][0]):
-                standbys.append({"code": text, "start": tokens[i + 1][0], "end": tokens[i + 2][0]})
+                events.append(
+                    ("standby", {"code": text, "start": tokens[i + 1][0], "end": tokens[i + 2][0]}, i)
+                )
                 i += 3
                 continue
             else:
-                flags.append(f"unrecognised_standby_shape_at_{i}")
+                flags.append((i, f"unrecognised_standby_shape_at_{i}"))
                 i += 1
                 continue
 
@@ -172,7 +212,7 @@ def parse_day(tokens):
                 i += 2
                 continue
             else:
-                flags.append(f"unrecognised_delay_shape_at_{i}")
+                flags.append((i, f"unrecognised_delay_shape_at_{i}"))
                 i += 1
                 continue
 
@@ -196,17 +236,21 @@ def parse_day(tokens):
                 and on_val is not None
                 and AIRCRAFT_RE.match(tokens[i + 5][0])
             ):
-                legs.append(
-                    {
-                        "flightNumber": text,
-                        "offBlock": off_val,
-                        "offBlockActual": off_actual,
-                        "origin": tokens[i + 2][0],
-                        "destination": tokens[i + 3][0],
-                        "onBlock": on_val,
-                        "onBlockActual": on_actual,
-                        "aircraft": tokens[i + 5][0].strip("[]"),
-                    }
+                events.append(
+                    (
+                        "leg",
+                        {
+                            "flightNumber": text,
+                            "offBlock": off_val,
+                            "offBlockActual": off_actual,
+                            "origin": tokens[i + 2][0],
+                            "destination": tokens[i + 3][0],
+                            "onBlock": on_val,
+                            "onBlockActual": on_actual,
+                            "aircraft": tokens[i + 5][0].strip("[]"),
+                        },
+                        i,
+                    )
                 )
                 i += 6
                 continue
@@ -214,63 +258,188 @@ def parse_day(tokens):
             if off2_val is not None and i + 2 < n and STATION_RE.match(tokens[i + 2][0]) and (
                 i + 3 >= n or tokens[i + 3][0] == "→"
             ):
-                legs.append(
-                    {
-                        "flightNumber": text,
-                        "offBlock": off2_val,
-                        "offBlockActual": off2_actual,
-                        "origin": None,
-                        "destination": tokens[i + 2][0],
-                        "onBlock": None,
-                        "onBlockActual": None,
-                        "aircraft": None,
-                        "continuesNextDay": True,
-                    }
+                events.append(
+                    (
+                        "leg",
+                        {
+                            "flightNumber": text,
+                            "offBlock": off2_val,
+                            "offBlockActual": off2_actual,
+                            "origin": None,
+                            "destination": tokens[i + 2][0],
+                            "onBlock": None,
+                            "onBlockActual": None,
+                            "aircraft": None,
+                            "continuesNextDay": True,
+                        },
+                        i,
+                    )
                 )
                 i += 3
                 continue
             else:
-                flags.append(f"unrecognised_flight_shape_at_{i}")
+                flags.append((i, f"unrecognised_flight_shape_at_{i}"))
                 i += 1
                 continue
 
-        if continuation and legs == [] and standbys == [] and STATION_RE.match(text):
+        if continuation and not has_content() and STATION_RE.match(text):
             if i + 2 < n and ACTUAL_TIME_RE.match(tokens[i + 1][0]) and AIRCRAFT_RE.match(tokens[i + 2][0]):
-                legs.append(
-                    {
-                        "flightNumber": None,
-                        "offBlock": None,
-                        "origin": None,
-                        "destination": text,
-                        "onBlock": ACTUAL_TIME_RE.match(tokens[i + 1][0]).group(1),
-                        "aircraft": tokens[i + 2][0].strip("[]"),
-                        "continuedFromPreviousDay": True,
-                    }
+                events.append(
+                    (
+                        "leg",
+                        {
+                            "flightNumber": None,
+                            "offBlock": None,
+                            "origin": None,
+                            "destination": text,
+                            "onBlock": ACTUAL_TIME_RE.match(tokens[i + 1][0]).group(1),
+                            "aircraft": tokens[i + 2][0].strip("[]"),
+                            "continuedFromPreviousDay": True,
+                        },
+                        i,
+                    )
                 )
                 i += 3
                 continue
 
         if TIME_RE.match(text):
-            if report_time is None and not legs and not standbys:
-                report_time = text
-            else:
-                trailing_time = text
+            events.append(("time", text, i))
             i += 1
             continue
 
-        flags.append(f"unclassified_token:{text!r}_at_{i}")
+        flags.append((i, f"unclassified_token:{text!r}_at_{i}"))
         i += 1
 
-    confident = not any(f.startswith("unrecognised") or f.startswith("unclassified") for f in flags)
+    split = _split_duties(events)
+    second_duty = split["secondDuty"]
+    extra_flags1 = split["extra_flags1"]
+    extra_flags2 = split["extra_flags2"]
+    split_token_idx = split["split_token_idx"]
+
+    # Partition the flat (token_idx, text) flags by which duty they
+    # describe. Without a split everything is duty 1's, same as before
+    # 03/10. With a split, anything recorded at or before the split
+    # point (duty 1's closing bare time) is duty 1's; anything after —
+    # notably a trailing "continues_next_day" from a token near the end
+    # of the cell — is duty 2's, even though the walk above only ever
+    # wrote to one shared `flags` list.
+    if split_token_idx is None:
+        flags1 = [text for _, text in flags]
+        flags2 = []
+    else:
+        flags1 = [text for idx, text in flags if idx <= split_token_idx]
+        flags2 = [text for idx, text in flags if idx > split_token_idx]
+
+    def _problem(fs):
+        return any(f.startswith("unrecognised") or f.startswith("unclassified") for f in fs)
+
+    if second_duty is not None:
+        flags1.append("second_duty_same_day")
+        second_duty["flags"] = flags2 + extra_flags2
+        second_duty["delays"] = []
+        second_duty["status"] = "needs_review" if (_problem(flags2) or extra_flags2) else "ok"
+
+    out = {
+        "status": "needs_review" if (_problem(flags1) or extra_flags1) else "ok",
+        "reportTime": split["reportTime"],
+        "standbys": split["standbys"],
+        "legs": split["legs"],
+        "delays": delays,
+        "trailingTime": split["trailingTime"],
+        "flags": flags1 + extra_flags1,
+    }
+    if second_duty is not None:
+        out["secondDuty"] = second_duty
+    return out
+
+
+def _split_duties(events):
+    """Group a day's ordered (leg/standby/time) events — each a
+    (kind, payload, token_index) triple — into one duty, or, when the
+    cell packs two entirely separate duties into the same calendar day,
+    into two (see the note in parse_day above for the real shape this
+    handles). The tell: two bare 'time' events back to back, with at
+    least one leg or standby already seen before them. The first of the
+    pair closes out the duty already in progress (its true finish time,
+    which used to get silently overwritten); the second opens a
+    brand-new duty that continues to the end of the token stream.
+
+    When the pattern doesn't appear — the normal case — this returns
+    exactly what the old inline code did: one report time (the first bare
+    time seen before any leg/standby), one trailing time (the last bare
+    time after), and the legs/standbys in between.
+    """
+
+    def _gather(evs):
+        report_time = None
+        trailing_time = None
+        legs = []
+        standbys = []
+        extra = []
+        for kind, payload, _idx in evs:
+            if kind == "leg":
+                legs.append(payload)
+            elif kind == "standby":
+                standbys.append(payload)
+            elif kind == "time":
+                if report_time is None and not legs and not standbys:
+                    report_time = payload
+                elif trailing_time is None:
+                    trailing_time = payload
+                else:
+                    # More bare times than one duty should ever have.
+                    # Keep the latest (closest to the pre-03/10 behaviour)
+                    # but flag it so it gets a manual look instead of
+                    # being silently trusted.
+                    extra.append("extra_bare_time_ignored")
+                    trailing_time = payload
+        return report_time, trailing_time, legs, standbys, extra
+
+    split_at = None
+    seen_content = False
+    for idx, (kind, _payload, _tok_idx) in enumerate(events):
+        if kind in ("leg", "standby"):
+            seen_content = True
+            continue
+        if kind == "time" and seen_content and idx + 1 < len(events) and events[idx + 1][0] == "time":
+            split_at = idx
+            break
+
+    if split_at is None:
+        report_time, trailing_time, legs, standbys, extra = _gather(events)
+        return {
+            "reportTime": report_time,
+            "trailingTime": trailing_time,
+            "legs": legs,
+            "standbys": standbys,
+            "secondDuty": None,
+            "extra_flags1": extra,
+            "extra_flags2": [],
+            "split_token_idx": None,
+        }
+
+    split_token_idx = events[split_at][2]
+    finish_time = events[split_at][1]
+    second_report = events[split_at + 1][1]
+    report_time, _, legs, standbys, extra1 = _gather(events[:split_at])
+    _, second_trailing, second_legs, second_standbys, extra2 = _gather(
+        [("time", second_report, events[split_at + 1][2])] + events[split_at + 2 :]
+    )
 
     return {
-        "status": "ok" if confident else "needs_review",
         "reportTime": report_time,
-        "standbys": standbys,
+        "trailingTime": finish_time,
         "legs": legs,
-        "delays": delays,
-        "trailingTime": trailing_time,
-        "flags": flags,
+        "standbys": standbys,
+        "secondDuty": {
+            "reportTime": second_report,
+            "trailingTime": second_trailing,
+            "legs": second_legs,
+            "standbys": second_standbys,
+        },
+        "extra_flags1": extra1,
+        "extra_flags2": extra2,
+        "split_token_idx": split_token_idx,
     }
 
 
@@ -335,6 +504,110 @@ def _day_sort_key(date_str, year):
     return (year, month, day)
 
 
+def _process_duty(duty, local_date, start_station):
+    """Convert one duty's LT fields to UTC in place, tracking which
+    station the pilot moves to leg by leg — the one piece of
+    resolve_utc_times' station-tracking/UTC-conversion logic, factored
+    out (03/10) so it can run a second time, unchanged, for a same-day
+    second duty (see parse_day/_split_duties) exactly as it already runs
+    for the day's (only, or first) duty. `duty` is either the day's own
+    dict or its `secondDuty` sub-dict — both use the same field names
+    (reportTime/legs/standbys/trailingTime).
+
+    Returns (end_station, intercontinental, transatlantic_direction,
+    time_difference_hours) for the caller to store on whichever dict
+    `duty` was, and to chain into the next call (next day, or this same
+    day's second duty) as its `start_station`.
+    """
+    current_station = start_station
+    intercontinental = False
+    direction = None
+    time_diff_hours = None
+
+    report_time = duty.get("reportTime")
+    if report_time:
+        report_utc = _to_utc(local_date, report_time, start_station)
+        if report_utc:
+            duty["reportTimeUtc"] = report_utc.isoformat()
+
+    for leg in duty.get("legs", []):
+        if leg.get("continuedFromPreviousDay"):
+            on_utc = _to_utc(local_date, leg.get("onBlock"), leg.get("destination"))
+            if on_utc:
+                leg["onBlockUtc"] = on_utc.isoformat()
+            if leg.get("destination"):
+                current_station = leg["destination"]
+            continue
+
+        origin = leg.get("origin") or current_station
+        off_utc = _to_utc(local_date, leg.get("offBlock"), origin)
+        if off_utc:
+            leg["offBlockUtc"] = off_utc.isoformat()
+
+        destination = leg.get("destination")
+        if leg.get("onBlock") and destination:
+            on_utc = _to_utc(local_date, leg["onBlock"], destination)
+            # A sector never takes >20h on this fleet — if the naive
+            # same-date conversion lands before departure (or absurdly
+            # close after it, implying it actually landed the next
+            # calendar day at destination), roll the local arrival
+            # date forward by one day and reconvert.
+            if on_utc and off_utc and on_utc <= off_utc:
+                on_utc = _to_utc(local_date + timedelta(days=1), leg["onBlock"], destination)
+            if on_utc:
+                leg["onBlockUtc"] = on_utc.isoformat()
+
+        # Intercontinental / direction / time-difference hint for this
+        # leg — only meaningful once we have both ends' UTC times.
+        if _is_intercontinental_station(origin) or _is_intercontinental_station(destination):
+            intercontinental = True
+            off_tz = _station_tz(origin)
+            on_tz = _station_tz(destination)
+            on_utc_val = leg.get("onBlockUtc")
+            if off_tz and off_utc and on_tz and on_utc_val:
+                on_dt = datetime.fromisoformat(on_utc_val)
+                off_local_offset = off_utc.astimezone(off_tz).utcoffset()
+                on_local_offset = on_dt.astimezone(on_tz).utcoffset()
+                if off_local_offset is not None and on_local_offset is not None:
+                    diff_hours = abs((off_local_offset - on_local_offset).total_seconds()) / 3600
+                    time_diff_hours = round(diff_hours)
+            if _is_intercontinental_station(destination) and not _is_intercontinental_station(origin):
+                direction = "westbound"
+            elif _is_intercontinental_station(origin) and not _is_intercontinental_station(destination):
+                direction = "eastbound"
+
+        if destination:
+            current_station = destination
+
+    # Catch-all (30/09): the per-leg check above only fires for a
+    # "regular" leg — an overnight leg that continues onto the next day's
+    # row (the 'continuedFromPreviousDay' branch) returns early and skips
+    # it. Rather than special-case every token shape, this checks the
+    # duty's overall start/end station instead: if the pilot started or
+    # ended it at an Intercontinental station, it counts as
+    # Intercontinental regardless of which branch parsed its legs.
+    if _is_intercontinental_station(start_station) or _is_intercontinental_station(current_station):
+        intercontinental = True
+
+    for standby in duty.get("standbys", []):
+        start_utc = _to_utc(local_date, standby.get("start"), start_station)
+        if start_utc:
+            standby["startUtc"] = start_utc.isoformat()
+        end_utc = _to_utc(local_date, standby.get("end"), start_station)
+        if end_utc and start_utc and end_utc <= start_utc:
+            end_utc = _to_utc(local_date + timedelta(days=1), standby.get("end"), start_station)
+        if end_utc:
+            standby["endUtc"] = end_utc.isoformat()
+
+    trailing_time = duty.get("trailingTime")
+    if trailing_time:
+        trailing_utc = _to_utc(local_date, trailing_time, current_station)
+        if trailing_utc:
+            duty["trailingTimeUtc"] = trailing_utc.isoformat()
+
+    return current_station, intercontinental, direction, time_diff_hours
+
+
 def resolve_utc_times(all_results, year, home_base=HOME_BASE):
     """Walk the roster chronologically, tracking which station the pilot
     is physically at, and add '...Utc' fields (ISO 8601, UTC) alongside
@@ -348,6 +621,16 @@ def resolve_utc_times(all_results, year, home_base=HOME_BASE):
     somewhere else is "at an outstation" (matching how 3.14.1(a)/(b) of
     the A320/321 Working Conditions, and the equivalent A330 clause 3.13,
     define those terms).
+
+    03/10: when parse_day found a same-day second duty (`secondDuty` —
+    see parse_day/_split_duties), it gets the exact same treatment via
+    _process_duty, continuing from wherever the day's first duty left the
+    pilot — so a day with two duties ends up with two complete, correctly
+    station-tracked and UTC-converted records instead of one merged,
+    partly-wrong one. Each duty's own reportStation/finishStation/
+    intercontinental/etc. are self-contained (the hint fields describe
+    THAT duty, not the whole day) — this matters once promote_second_duties
+    (below) lifts `secondDuty` into its own day-shaped entry.
 
     Simplifications, flagged here rather than hidden in the code:
     - After a day off ('F'/'GL'), the pilot is assumed to be back at
@@ -386,95 +669,31 @@ def resolve_utc_times(all_results, year, home_base=HOME_BASE):
         station_at_start = current_station
         entry["reportStation"] = station_at_start
 
-        report_time = entry.get("reportTime")
-        if report_time:
-            report_utc = _to_utc(local_date, report_time, station_at_start)
-            if report_utc:
-                entry["reportTimeUtc"] = report_utc.isoformat()
-
-        intercontinental = False
-        for leg in entry.get("legs", []):
-            if leg.get("continuedFromPreviousDay"):
-                on_utc = _to_utc(local_date, leg.get("onBlock"), leg.get("destination"))
-                if on_utc:
-                    leg["onBlockUtc"] = on_utc.isoformat()
-                if leg.get("destination"):
-                    current_station = leg["destination"]
-                continue
-
-            origin = leg.get("origin") or current_station
-            off_utc = _to_utc(local_date, leg.get("offBlock"), origin)
-            if off_utc:
-                leg["offBlockUtc"] = off_utc.isoformat()
-
-            destination = leg.get("destination")
-            if leg.get("onBlock") and destination:
-                on_utc = _to_utc(local_date, leg["onBlock"], destination)
-                # A sector never takes >20h on this fleet — if the naive
-                # same-date conversion lands before departure (or absurdly
-                # close after it, implying it actually landed the next
-                # calendar day at destination), roll the local arrival
-                # date forward by one day and reconvert.
-                if on_utc and off_utc and on_utc <= off_utc:
-                    on_utc = _to_utc(local_date + timedelta(days=1), leg["onBlock"], destination)
-                if on_utc:
-                    leg["onBlockUtc"] = on_utc.isoformat()
-
-            # Intercontinental / direction / time-difference hint for this
-            # leg — only meaningful once we have both ends' UTC times.
-            if _is_intercontinental_station(origin) or _is_intercontinental_station(destination):
-                intercontinental = True
-                off_tz = _station_tz(origin)
-                on_tz = _station_tz(destination)
-                on_utc_val = leg.get("onBlockUtc")
-                if off_tz and off_utc and on_tz and on_utc_val:
-                    on_dt = datetime.fromisoformat(on_utc_val)
-                    off_local_offset = off_utc.astimezone(off_tz).utcoffset()
-                    on_local_offset = on_dt.astimezone(on_tz).utcoffset()
-                    if off_local_offset is not None and on_local_offset is not None:
-                        diff_hours = abs((off_local_offset - on_local_offset).total_seconds()) / 3600
-                        entry["intercontinentalTimeDifferenceHours"] = round(diff_hours)
-                if _is_intercontinental_station(destination) and not _is_intercontinental_station(origin):
-                    entry["transatlanticDirection"] = "westbound"
-                elif _is_intercontinental_station(origin) and not _is_intercontinental_station(destination):
-                    entry["transatlanticDirection"] = "eastbound"
-
-            if destination:
-                current_station = destination
-
-        # Catch-all (30/09, later the same day): the per-leg check above
-        # only fires for a "regular" leg — an overnight leg that continues
-        # onto the next day's row (the 'continuedFromPreviousDay' branch)
-        # returns early and skips it. Rather than special-case every token
-        # shape, this checks the day's overall start/end station instead:
-        # if the pilot started or ended the day at an Intercontinental
-        # station, the day counts as Intercontinental regardless of which
-        # branch parsed its legs. Confirmed against a real overnight
-        # DUB<->PHL crossing that the per-leg check alone was missing.
-        if _is_intercontinental_station(station_at_start) or _is_intercontinental_station(
-            current_station
-        ):
-            intercontinental = True
-
+        end_station, intercontinental, direction, time_diff = _process_duty(
+            entry, local_date, station_at_start
+        )
+        entry["finishStation"] = end_station
         entry["intercontinental"] = intercontinental
+        if direction:
+            entry["transatlanticDirection"] = direction
+        if time_diff is not None:
+            entry["intercontinentalTimeDifferenceHours"] = time_diff
 
-        for standby in entry.get("standbys", []):
-            start_utc = _to_utc(local_date, standby.get("start"), station_at_start)
-            if start_utc:
-                standby["startUtc"] = start_utc.isoformat()
-            end_utc = _to_utc(local_date, standby.get("end"), station_at_start)
-            if end_utc and start_utc and end_utc <= start_utc:
-                end_utc = _to_utc(local_date + timedelta(days=1), standby.get("end"), station_at_start)
-            if end_utc:
-                standby["endUtc"] = end_utc.isoformat()
-
-        trailing_time = entry.get("trailingTime")
-        if trailing_time:
-            trailing_utc = _to_utc(local_date, trailing_time, current_station)
-            if trailing_utc:
-                entry["trailingTimeUtc"] = trailing_utc.isoformat()
-
-        entry["finishStation"] = current_station
+        second = entry.get("secondDuty")
+        if second:
+            second["reportStation"] = end_station
+            end_station2, intercontinental2, direction2, time_diff2 = _process_duty(
+                second, local_date, end_station
+            )
+            second["finishStation"] = end_station2
+            second["intercontinental"] = intercontinental2
+            if direction2:
+                second["transatlanticDirection"] = direction2
+            if time_diff2 is not None:
+                second["intercontinentalTimeDifferenceHours"] = time_diff2
+            current_station = end_station2
+        else:
+            current_station = end_station
 
     return all_results
 
@@ -495,31 +714,121 @@ def stitch_overnight_duties(all_results, year):
 
     for idx, key in enumerate(ordered_keys):
         entry = all_results[key]
-        if "continues_next_day" not in entry.get("flags", []):
+        # 03/10: the duty that can actually run into the next day is
+        # whichever one ENDS this calendar day — the same-day second
+        # duty when parse_day found one (see _split_duties), otherwise
+        # the day's only duty. The "continues_next_day" flag for that
+        # trailing duty lives on its own flags list (parse_day assigns
+        # each flag to whichever duty it actually describes), never on
+        # the day's primary duty once a split has happened — the one
+        # case that matters here is a day whose SECOND duty is itself
+        # an overnight one (e.g. 23/08's new 17:30 duty flying on into
+        # 24/08) — stitching must continue from that, not from the
+        # primary duty that already finished hours earlier.
+        last_duty = entry.get("secondDuty") or entry
+        if "continues_next_day" not in last_duty.get("flags", []):
             continue
         if idx + 1 >= len(ordered_keys):
             continue
         next_entry = all_results[ordered_keys[idx + 1]]
+        # Only the next day's FIRST duty can be the continuation — the
+        # '↓' marker that creates it is always the very first token of
+        # the day, so it's never the next day's own secondDuty.
         if "continuation_from_previous_day" not in next_entry.get("flags", []):
             continue
 
-        arrival_leg = next((l for l in next_entry.get("legs", []) if l.get("continuedFromPreviousDay")), None)
-        if not arrival_leg or "onBlockUtc" not in arrival_leg:
+        # Prefer the next day's own (first) duty trailing time when
+        # parse_day already resolved it directly — e.g. the "Delay + two
+        # bare times" shape that splits into a same-day second duty: the
+        # bare time right after the arrival leg IS the overnight duty's
+        # true finish, no digging into `legs` needed. Fall back to the
+        # narrower continuedFromPreviousDay-tagged-leg lookup for the
+        # other print shape, where the arrival is a bare 3-token leg
+        # with no separate bare finish time printed alongside it.
+        finish_time = next_entry.get("trailingTime")
+        finish_time_utc = next_entry.get("trailingTimeUtc")
+        if not finish_time_utc:
+            arrival_leg = next(
+                (l for l in next_entry.get("legs", []) if l.get("continuedFromPreviousDay")),
+                None,
+            )
+            if arrival_leg and "onBlockUtc" in arrival_leg:
+                finish_time = arrival_leg.get("onBlock")
+                finish_time_utc = arrival_leg["onBlockUtc"]
+
+        if not finish_time_utc:
             continue
 
-        # Fill this day's missing finish with the continuation's arrival,
-        # and the continuation day's missing report with this day's
-        # original report — so both rows describe the same complete duty.
-        if not entry.get("trailingTimeUtc"):
-            entry["trailingTime"] = arrival_leg["onBlock"]
-            entry["trailingTimeUtc"] = arrival_leg["onBlockUtc"]
-            entry.setdefault("flags", []).append("finish_time_from_next_day")
-        if not next_entry.get("reportTimeUtc") and entry.get("reportTimeUtc"):
-            next_entry["reportTime"] = entry.get("reportTime")
-            next_entry["reportTimeUtc"] = entry["reportTimeUtc"]
+        # Fill this duty's missing finish with the continuation's
+        # arrival, and the continuation day's missing report with this
+        # duty's original report — so both rows describe the same
+        # complete duty.
+        if not last_duty.get("trailingTimeUtc"):
+            last_duty["trailingTime"] = finish_time
+            last_duty["trailingTimeUtc"] = finish_time_utc
+            last_duty.setdefault("flags", []).append("finish_time_from_next_day")
+        if not next_entry.get("reportTimeUtc") and last_duty.get("reportTimeUtc"):
+            next_entry["reportTime"] = last_duty.get("reportTime")
+            next_entry["reportTimeUtc"] = last_duty["reportTimeUtc"]
             next_entry.setdefault("flags", []).append("report_time_from_previous_day")
 
     return all_results
+
+
+# ---------------------------------------------------------------------------
+# Same-day second-duty promotion (03/10) — lifts a day's `secondDuty` (see
+# parse_day/_split_duties) into its own top-level entry, so the app's
+# existing per-day model and batch audits — which already just trust
+# whatever order the `days` map is in (lib/models/roster_day.dart,
+# lib/batch/master_roster_audit.dart) — see two separate, complete duty
+# records for that calendar date with zero changes needed on that side.
+# ---------------------------------------------------------------------------
+
+
+def _second_duty_key(date_str):
+    return f"{date_str} (2)"
+
+
+def promote_second_duties(all_results, year):
+    """Must run AFTER resolve_utc_times/stitch_overnight_duties: the
+    synthetic "dd/mm (2)" key doesn't match DATE_HEADER_RE and would
+    otherwise be silently skipped by both passes' own chronological
+    walks (which is exactly why this runs last, once every field both
+    passes fill in is already in place).
+
+    Rebuilds `all_results` in calendar order so each promoted entry lands
+    immediately after its own day and before the next calendar day —
+    dict insertion order is what the JSON response (and the Dart side
+    reading it) preserves.
+    """
+    ordered_keys = sorted(
+        (k for k in all_results if DATE_HEADER_RE.match(k)),
+        key=lambda k: _day_sort_key(k, year),
+    )
+
+    rebuilt = {}
+    for key in ordered_keys:
+        entry = all_results[key]
+        second = entry.pop("secondDuty", None)
+        rebuilt[key] = entry
+        if second is None:
+            continue
+        second.setdefault("status", "ok")
+        second.setdefault("flags", [])
+        second.setdefault("delays", [])
+        second_key = _second_duty_key(key)
+        rebuilt[second_key] = second
+        entry.setdefault("flags", []).append(f"second_duty_promoted_to:{second_key}")
+
+    # Carry over anything that wasn't a date-header key unchanged (there
+    # shouldn't be any in practice — parse_page only ever keys by the
+    # header row's own date strings — but this keeps the function safe
+    # if that ever changes).
+    for key, entry in all_results.items():
+        if key not in rebuilt and not DATE_HEADER_RE.match(key):
+            rebuilt[key] = entry
+
+    return rebuilt
 
 
 def parse_roster_pdf(file_path, year=None):
@@ -556,5 +865,6 @@ def parse_roster_pdf(file_path, year=None):
 
     resolve_utc_times(all_results, year)
     stitch_overnight_duties(all_results, year)
+    all_results = promote_second_duties(all_results, year)
 
     return all_results
