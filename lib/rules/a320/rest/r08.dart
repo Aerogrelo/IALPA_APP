@@ -11,7 +11,7 @@ import '../../../models/rule_result.dart';
 /// not set a separate rest floor for a through-the-night duty; the
 /// disruption is addressed on the FDP side (WOCL), not the rest side, so the
 /// ordinary at-home-base floor (the preceding duty or 12h, whichever is
-/// greater) is the correct reference. If planned rest breaches the convenio
+/// greater) is the correct reference. If planned rest breaches the agreement
 /// minimum but still meets this EASA floor, the result is AMBER (OWC)
 /// rather than RED.
 RuleResult verifyR08({
@@ -20,6 +20,7 @@ RuleResult verifyR08({
 }) {
   const absoluteMinimum = Duration(hours: 14);
   const offset = Duration(hours: 4);
+  const formulaDetail = 'actual duty + 4h or 14h, whichever is greater';
 
   final formulaMinimum = previousDuty.duration + offset;
   final minimumRest =
@@ -39,7 +40,7 @@ RuleResult verifyR08({
       color: RuleColor.green,
       clause: '3.14.1(c)',
       explanation: 'Planned rest of ${_fmt(plannedRest)} meets the required '
-          'minimum of ${_fmt(minimumRest)}.',
+          'minimum of ${_fmt(minimumRest)} ($formulaDetail).',
       easaReference: easaReference,
     );
   }
@@ -49,10 +50,11 @@ RuleResult verifyR08({
       color: RuleColor.amber,
       clause: '3.14.1(c)',
       explanation: 'OWC (Outside Working Conditions). Planned rest of '
-          '${_fmt(plannedRest)} does NOT meet the convenio minimum of '
-          '${_fmt(minimumRest)}, but it DOES meet the EASA minimum of '
-          '${_fmt(easaMinimum)} — so it breaches the agreement but is '
-          'legal. Requires Blue Sheet compensation / pilot consent.',
+          '${_fmt(plannedRest)} does NOT meet the agreement minimum of '
+          '${_fmt(minimumRest)} ($formulaDetail), but it DOES meet the '
+          'EASA minimum of ${_fmt(easaMinimum)} — so it breaches the '
+          'agreement but is legal. Requires Blue Sheet compensation / '
+          'pilot consent.',
       easaReference: easaReference,
     );
   }
@@ -61,9 +63,10 @@ RuleResult verifyR08({
     color: RuleColor.red,
     clause: '3.14.1(c)',
     explanation: 'Planned rest of ${_fmt(plannedRest)} does NOT meet the '
-        'required minimum of ${_fmt(minimumRest)}, and it also falls short '
-        'of the EASA minimum of ${_fmt(easaMinimum)} — this is not just a '
-        'breach of the agreement, it is illegal under EASA.',
+        'required minimum of ${_fmt(minimumRest)} ($formulaDetail), and it '
+        'also falls short of the EASA minimum of ${_fmt(easaMinimum)} — '
+        'this is not just a breach of the agreement, it is illegal under '
+        'EASA.',
     easaReference: easaReference,
   );
 }

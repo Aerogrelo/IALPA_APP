@@ -14,6 +14,7 @@ RuleResult verifyR11({
 }) {
   const absoluteMinimum = Duration(hours: 12);
   const offset = Duration(hours: 2);
+  const formulaDetail = 'actual duty + 2h or 12h, whichever is greater';
 
   final formulaMinimum = previousDuty.duration + offset;
   final minimumRest =
@@ -31,7 +32,7 @@ RuleResult verifyR11({
       color: RuleColor.green,
       clause: '3.14.3(b)',
       explanation: 'Planned rest of ${_fmt(plannedRest)} meets the required '
-          'minimum of ${_fmt(minimumRest)}.',
+          'minimum of ${_fmt(minimumRest)} ($formulaDetail).',
       easaReference: easaReference,
     );
   }
@@ -41,10 +42,11 @@ RuleResult verifyR11({
       color: RuleColor.amber,
       clause: '3.14.3(b)',
       explanation: 'OWC (Outside Working Conditions). Planned rest of '
-          '${_fmt(plannedRest)} does NOT meet the convenio minimum of '
-          '${_fmt(minimumRest)}, but it DOES meet the EASA minimum of '
-          '${_fmt(easaMinimum)} — so it breaches the agreement but is '
-          'legal. Requires Blue Sheet compensation / pilot consent.',
+          '${_fmt(plannedRest)} does NOT meet the agreement minimum of '
+          '${_fmt(minimumRest)} ($formulaDetail), but it DOES meet the '
+          'EASA minimum of ${_fmt(easaMinimum)} — so it breaches the '
+          'agreement but is legal. Requires Blue Sheet compensation / '
+          'pilot consent.',
       easaReference: easaReference,
     );
   }
@@ -53,9 +55,10 @@ RuleResult verifyR11({
     color: RuleColor.red,
     clause: '3.14.3(b)',
     explanation: 'Planned rest of ${_fmt(plannedRest)} does NOT meet the '
-        'required minimum of ${_fmt(minimumRest)}, and it also falls short '
-        'of the EASA minimum of ${_fmt(easaMinimum)} — this is not just a '
-        'breach of the agreement, it is illegal under EASA.',
+        'required minimum of ${_fmt(minimumRest)} ($formulaDetail), and it '
+        'also falls short of the EASA minimum of ${_fmt(easaMinimum)} — '
+        'this is not just a breach of the agreement, it is illegal under '
+        'EASA.',
     easaReference: easaReference,
   );
 }

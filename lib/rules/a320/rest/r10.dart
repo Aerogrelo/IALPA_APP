@@ -10,8 +10,8 @@ import '../../../models/rule_result.dart';
 /// from home base after a duty with a significant time-zone difference, and
 /// EASA's own floor for that exact situation (ORO.FTL.235 / CS FTL.1.235)
 /// is the preceding duty or 14h, whichever is greater — the same formula
-/// the convenio already uses. The two floors coincide, so there is no gap
-/// to open an amber (OWC) zone in: a breach of the convenio here is also a
+/// the agreement already uses. The two floors coincide, so there is no gap
+/// to open an amber (OWC) zone in: a breach of the agreement here is also a
 /// breach of EASA, and stays red.
 RuleResult verifyR10({
   required Duty previousDuty,
@@ -22,13 +22,15 @@ RuleResult verifyR10({
   final formulaMinimum = previousDuty.duration + previousDuty.timeDifference;
   final minimumRest =
       formulaMinimum > absoluteMinimum ? formulaMinimum : absoluteMinimum;
+  final formulaDetail = 'actual duty + time difference '
+      '(${_fmt(previousDuty.timeDifference)}) or 14h, whichever is greater';
 
   if (plannedRest >= minimumRest) {
     return RuleResult(
       color: RuleColor.green,
       clause: '3.14.2(e)',
       explanation: 'Planned rest of ${_fmt(plannedRest)} meets the required '
-          'minimum of ${_fmt(minimumRest)}.',
+          'minimum of ${_fmt(minimumRest)} ($formulaDetail).',
     );
   }
 
@@ -36,10 +38,10 @@ RuleResult verifyR10({
     color: RuleColor.red,
     clause: '3.14.2(e)',
     explanation: 'Planned rest of ${_fmt(plannedRest)} does NOT meet the '
-        'required minimum of ${_fmt(minimumRest)} — this floor already '
-        'matches the EASA minimum for rest away from base after a '
-        'significant time-zone difference, so this is also illegal under '
-        'EASA, not just a breach of the agreement.',
+        'required minimum of ${_fmt(minimumRest)} ($formulaDetail) — this '
+        'floor already matches the EASA minimum for rest away from base '
+        'after a significant time-zone difference, so this is also '
+        'illegal under EASA, not just a breach of the agreement.',
   );
 }
 

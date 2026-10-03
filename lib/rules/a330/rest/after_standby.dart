@@ -12,12 +12,12 @@ import '../../../models/rule_result.dart';
 /// assigned during the standby or not.
 ///
 /// EASA-equivalent floor (30/09): a standby duty under 2.21 is always a
-/// Standby at Home (STBH) — the A330 convenio has no STBA-equivalent, only
+/// Standby at Home (STBH) — the A330 agreement has no STBA-equivalent, only
 /// STBH and STBB (a multi-day reserve block, not modelled by this rule).
 /// So, like the A320/321's R-12, this is always at home base: EASA floor =
 /// `max(duty assigned during standby, 12h)` — same pattern as R-06/R-11/R-12
 /// and the A330 pre-intercontinental rule. [dutyAssignedOnStandby] is
-/// optional because the convenio floor (13h) doesn't need it — pass it to
+/// optional because the agreement floor (13h) doesn't need it — pass it to
 /// get the amber/red split; omitting it keeps the green/red-only behaviour.
 RuleResult verifyA330AfterStandbyRest({
   required Duration plannedRest,
@@ -49,8 +49,9 @@ RuleResult verifyA330AfterStandbyRest({
         color: RuleColor.amber,
         clause: '3.16.10',
         explanation: 'OWC (Outside Working Conditions). Planned rest of '
-            '${_fmt(plannedRest)} does NOT meet the convenio minimum of '
-            '${_fmt(minimumRest)}, but it DOES meet the EASA minimum of '
+            '${_fmt(plannedRest)} does NOT meet the agreement minimum of '
+            '${_fmt(minimumRest)} (following completion of any standby '
+            'duty), but it DOES meet the EASA minimum of '
             '${_fmt(easaMinimum)} — so it breaches the agreement but is '
             'legal. Requires Blue Sheet compensation / pilot consent.',
         easaReference: easaReference,
@@ -61,9 +62,10 @@ RuleResult verifyA330AfterStandbyRest({
       color: RuleColor.red,
       clause: '3.16.10',
       explanation: 'Planned rest of ${_fmt(plannedRest)} does NOT meet the '
-          'required minimum of ${_fmt(minimumRest)}, and it also falls '
-          'short of the EASA minimum of ${_fmt(easaMinimum)} — this is not '
-          'just a breach of the agreement, it is illegal under EASA.',
+          'required minimum of ${_fmt(minimumRest)} (following completion '
+          'of any standby duty), and it also falls short of the EASA '
+          'minimum of ${_fmt(easaMinimum)} — this is not just a breach of '
+          'the agreement, it is illegal under EASA.',
       easaReference: easaReference,
     );
   }
@@ -72,7 +74,8 @@ RuleResult verifyA330AfterStandbyRest({
     color: RuleColor.red,
     clause: '3.16.10',
     explanation: 'Planned rest of ${_fmt(plannedRest)} does NOT meet the '
-        'required minimum of ${_fmt(minimumRest)}.',
+        'required minimum of ${_fmt(minimumRest)} (following completion of '
+        'any standby duty).',
   );
 }
 

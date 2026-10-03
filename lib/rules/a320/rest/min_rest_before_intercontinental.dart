@@ -21,11 +21,11 @@ import '../../../models/rule_result.dart';
 /// pilots never operate an intercontinental duty away from base), the
 /// applicable EASA rest rule is the general at-home-base one (ORO.FTL.235 /
 /// CS FTL.1.235): minimum rest = the GREATER of the preceding duty period
-/// or 12h — with no "+2h" component, unlike the convenio's own general
-/// formula, so EASA's floor is more lenient than even the convenio's
+/// or 12h — with no "+2h" component, unlike the agreement's own general
+/// formula, so EASA's floor is more lenient than even the agreement's
 /// general (non-intercontinental-specific) minimum.
 ///
-/// If planned rest breaches the convenio minimum (15h floor / duty+2h) but
+/// If planned rest breaches the agreement minimum (15h floor / duty+2h) but
 /// still meets this EASA floor, the result is AMBER: it is an Outside
 /// Working Conditions (OWC) duty — it breaches the agreement but is legal
 /// under EASA, and would require Blue Sheet compensation / pilot consent.
@@ -93,7 +93,7 @@ RuleResult verifyMinRestBeforeIntercontinental({
   } else if (plannedRest >= easaMinimum) {
     color = RuleColor.amber;
     explanation = 'OWC (Outside Working Conditions). Planned rest of '
-        '${_fmt(plannedRest)} does NOT meet the convenio minimum of '
+        '${_fmt(plannedRest)} does NOT meet the agreement minimum of '
         '${_fmt(minimumRest)} ($detail), but it DOES meet the EASA '
         'minimum of ${_fmt(easaMinimum)} — so it breaches the agreement '
         'but is legal. Requires Blue Sheet compensation / pilot consent.';

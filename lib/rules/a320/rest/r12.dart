@@ -11,7 +11,7 @@ import '../../../models/rule_result.dart';
 /// EASA-equivalent floor (added 2026-09-28): a standby at home (STBH) is by
 /// definition at home base, so this uses the same EASA at-home-base floor
 /// as R-06/R-11 — the preceding duty period or 12h, whichever is greater.
-/// When no duty was assigned, the convenio minimum (12h) already equals
+/// When no duty was assigned, the agreement minimum (12h) already equals
 /// the EASA floor, so there is no amber zone in that case.
 RuleResult verifyR12({
   required Duty? dutyAssignedOnStandby,
@@ -58,7 +58,7 @@ RuleResult verifyR12({
       color: RuleColor.amber,
       clause: '3.17.5',
       explanation: 'OWC (Outside Working Conditions). Planned rest of '
-          '${_fmt(plannedRest)} does NOT meet the convenio minimum of '
+          '${_fmt(plannedRest)} does NOT meet the agreement minimum of '
           '${_fmt(minimumRest)} ($formulaDetail), but it DOES meet the '
           'EASA minimum of ${_fmt(easaMinimum)} — so it breaches the '
           'agreement but is legal. Requires Blue Sheet compensation / '

@@ -25,7 +25,7 @@ import 'effective_duty.dart';
 ///
 /// Commander's discretion (3.11.2, referenced via Appendix A / Flight
 /// Operations Manual Part A, added 2026-09-28): same situation as R-14 —
-/// the convenio gives no numeric limit of its own for this extension, so
+/// the agreement gives no numeric limit of its own for this extension, so
 /// the ceiling used here comes directly from EASA (ORO.FTL.205f): up to 2h
 /// beyond the normal maximum, non-augmented crew, unforeseen circumstances
 /// only. Does not verify against the (unavailable) Ops Manual Part A
@@ -74,7 +74,7 @@ RuleResult verifyR15({
   final discretionMaximum = maximum + discretionExtension;
   const easaReference = "EASA ORO.FTL.205(f): Commander's discretion may "
       'extend the maximum FDP by up to 2h for a non-augmented crew, only '
-      'for unforeseen circumstances. The convenio defers to the Flight '
+      'for unforeseen circumstances. The agreement defers to the Flight '
       'Operations Manual Part A for its own limit, which this app does '
       'not have access to.';
 

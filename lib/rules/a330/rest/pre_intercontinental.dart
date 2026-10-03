@@ -12,7 +12,7 @@ import '../../../models/rule_result.dart';
 /// A320/321, this rest is always taken at home base. EASA floor =
 /// `max(previous duty, 12h)` — same pattern as R-06/R-11 and the A320/321
 /// pre-intercontinental rule. [previousDuty] is optional because the
-/// convenio side of this rule doesn't need it (flat 15h/13h) — pass it to
+/// agreement side of this rule doesn't need it (flat 15h/13h) — pass it to
 /// get the amber/red split; omitting it keeps the old green/red behaviour.
 RuleResult verifyA330PreIntercontinentalRest({
   required Duration plannedRest,
@@ -21,7 +21,9 @@ RuleResult verifyA330PreIntercontinentalRest({
 }) {
   final minimumRest =
       precededByStandby ? const Duration(hours: 13) : const Duration(hours: 15);
-  final suffix = precededByStandby ? ' (13h, preceded by standby)' : '';
+  final suffix = precededByStandby
+      ? ' (13h, preceded by standby)'
+      : ' (15h flat floor, not preceded by standby)';
 
   if (plannedRest >= minimumRest) {
     return RuleResult(
@@ -46,7 +48,7 @@ RuleResult verifyA330PreIntercontinentalRest({
         color: RuleColor.amber,
         clause: '3.13 (pre-intercontinental)',
         explanation: 'OWC (Outside Working Conditions). Planned rest of '
-            '${_fmt(plannedRest)} does NOT meet the convenio minimum of '
+            '${_fmt(plannedRest)} does NOT meet the agreement minimum of '
             '${_fmt(minimumRest)}$suffix, but it DOES meet the EASA minimum '
             'of ${_fmt(easaMinimum)} — so it breaches the agreement but is '
             'legal. Requires Blue Sheet compensation / pilot consent.',

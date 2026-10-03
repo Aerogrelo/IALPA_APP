@@ -27,7 +27,7 @@ import 'effective_duty.dart';
 /// for the counted duty duration in [effectiveFlightDutyTime]. When
 /// omitted, the duty's own report time is used, i.e. no delay adjustment.
 ///
-/// Commander's discretion (3.11.1(e), added 2026-09-28): the convenio text
+/// Commander's discretion (3.11.1(e), added 2026-09-28): the agreement text
 /// itself gives NO numeric limit for this extension — it only says "may be
 /// extended by Commander's discretion as outlined in the Flight Operations
 /// Manual Part A", a document not available to this app. So, unlike the
@@ -109,7 +109,7 @@ RuleResult verifyR14({
   final discretionMaximum = maximum + discretionExtension;
   const easaReference = "EASA ORO.FTL.205(f): Commander's discretion may "
       'extend the maximum FDP by up to 2h for a non-augmented crew, only '
-      'for unforeseen circumstances. The convenio (3.11.1e) defers to the '
+      'for unforeseen circumstances. The agreement (3.11.1e) defers to the '
       'Flight Operations Manual Part A for its own limit, which this app '
       'does not have access to.';
 
