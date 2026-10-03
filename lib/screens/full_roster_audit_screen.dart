@@ -163,10 +163,19 @@ class _FullRosterAuditScreenState extends State<FullRosterAuditScreen> {
     return {for (final e in entries) e.key: e.value};
   }
 
+  /// 03/10: a day with two duties printed in its cell (see
+  /// roster_parser.py's `promote_second_duties`) comes back as a SECOND
+  /// entry keyed "DD/MM (2)" right alongside the plain "DD/MM" one —
+  /// strip that suffix before parsing the day/month, and use it as a
+  /// tiebreaker so the second duty always sorts immediately after its
+  /// own day (never before it, which `auditPilotMinRest`'s
+  /// compare-with-the-previous-day walk depends on).
   int _dayMonthKey(String key) {
-    final parts = key.split('/');
+    final isSecondDuty = key.endsWith(' (2)');
+    final base = isSecondDuty ? key.substring(0, key.length - 4) : key;
+    final parts = base.split('/');
     final day = int.parse(parts[0]);
     final month = int.parse(parts[1]);
-    return month * 100 + day;
+    return month * 10000 + day * 100 + (isSecondDuty ? 1 : 0);
   }
 }
